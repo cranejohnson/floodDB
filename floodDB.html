@@ -1,0 +1,867 @@
+<head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+
+
+<style>
+
+.box-table-a {
+    font-family:"Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+    font-size:12px;
+    width:100%;
+    text-align:left;
+    border-collapse:collapse;
+    margin:0px;}
+
+.box-table-a th{
+    font-size:13px;
+    font-weight:normal;
+    background:#b9c9fe;
+    border-top:4px solid #aabcfe;
+    border-bottom:1px solid #fff;
+    color:#039;
+    padding:8px;}
+
+.box-table-a td{
+    background:#e8edff;
+    border-bottom:1px solid #fff;
+    color:#669;
+    border-top:1px solid transparent;
+    padding:8px;}
+
+.box-table-a tr:hover td{
+    background:#d0dafd;
+    color:#339;}
+
+h3 {
+    text-align: center;
+}
+
+.center{
+    text-align: center;
+}
+
+.maincontainer {
+    width: 80%;
+    background: grey;
+    margin: auto;
+    padding: 10px;
+}
+#containerNFIP {
+    width: 50%;
+    height: 400px;
+    background: red;
+    float: left;
+}
+#containerBorough {
+    margin-left: 50%;
+    height: 400px;
+    background: black;
+}
+</style>
+<script>
+
+var communities = {};
+var floods = {};
+
+//Get Community Table
+$.ajax({
+    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=communities",
+    dataType: "json",
+    success: function( response ) {
+        communities = response;
+    }
+});
+
+//Get Flood Table
+$.ajax({
+    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=floods",
+    dataType: "json",
+    success: function( response ) {
+        floods = response;
+    }
+});
+
+$(document).ajaxStop(function () {
+    console.log('Done Loading');
+    calcNFIP(communities);
+    $.each(floods,function(i,flood){
+        var placeID = flood['communitiesID'];
+        var result = communities.filter(function( obj ) {
+                return obj.ID == placeID;
+            });
+        jQuery.extend(floods[i], result[0]);
+    });
+    calcBorFloods(floods,10,'Major');
+    calcComFloods(floods,40,'Major');
+    calcCauseFloods(floods,'Total');
+    calcSourceFloods(floods);
+    calcFloodsByDecade(floods);
+
+
+});
+
+function getFloodList(floods,severity,filter,value){
+    var floodList = [];
+    if(value == 'Undefined') value = "";
+    $.each(floods,function(i,flood){
+        if((flood['floodSeverity'] == severity) &&(flood[filter] == value)){
+            floodList.push(flood['floodsID']);
+        }
+    });
+    return floodList;
+}
+
+
+// Builds the HTML Table out of myList.
+function buildHtmlTable(selector,myList) {
+  var columns = addAllColumnHeaders(myList, selector);
+
+  for (var i = 0; i < myList.length; i++) {
+    var row$ = $('<tr/>');
+    for (var colIndex = 0; colIndex < columns.length; colIndex++) {
+      var cellValue = myList[i][columns[colIndex]];
+      if (cellValue == null) cellValue = "";
+      row$.append($('<td/>').html(cellValue));
+    }
+    $(selector).append(row$);
+  }
+}
+
+// Adds a header row to the table and returns the set of columns.
+// Need to do union of keys from all records as some records may not contain
+// all records.
+function addAllColumnHeaders(myList, selector) {
+  var columnSet = [];
+  var headerTr$ = $('<tr/>');
+
+  for (var i = 0; i < myList.length; i++) {
+    var rowHash = myList[i];
+    for (var key in rowHash) {
+      if ($.inArray(key, columnSet) == -1) {
+        columnSet.push(key);
+        headerTr$.append($('<th/>').html(key));
+      }
+    }
+  }
+  $(selector).append(headerTr$);
+
+  return columnSet;
+}
+
+
+
+function makeFloodTable(id,floods,floodList){
+    var columns = ['floodsID','name','year','month','fldCause','floodSeverity','impactsHMP','impactsRiverNotes','impactsStormReports','fedDR','stateDR','stormReportID'];
+    var data = [];
+    $.each(floods,function(i,flood){
+        if(floodList.indexOf(flood['floodsID'])>-1){
+            var d = {};
+            $.each(columns,function(i,val){
+                d[val] = flood[val];
+            });
+            data.push(d);
+        }
+    });
+    buildHtmlTable('#'+id,data);
+
+
+
+}
+
+function calcSourceFloods(floods){
+    var sources = ['impactsHMP','impactsRiverNotes','impactsStormReports'];
+    var labels = ['Hazard Mitigation Plans','River Notes','Storm Reports'];
+
+    var zeroData = [];
+    for(i=0;i<sources.length;i++){
+        zeroData.push(0);
+    }
+
+    var dataArray = {};
+    $.each(sources,function(i,source){
+        dataArray[source] = {   Total : 0,
+                                Major: 0,
+                                Moderate: 0,
+                                Minor: 0,
+                                "":0
+                                    };
+    });
+
+
+    $.each(floods, function(i,flood){
+        $.each(sources,function(i,source){
+            if(flood[source] != ""){
+                dataArray[source][flood['floodSeverity']] = dataArray[source][flood['floodSeverity']] + 1;
+                dataArray[source]['Total'] = dataArray[source]['Total'] + 1;
+            }
+        });
+    });
+
+
+    var floodData =
+        [{
+            name: 'Undefined',
+            data: [],
+            color: "#cccccc"
+        }, {
+            name: 'Minor',
+            data: [],
+            color: '#FFC575'
+        }, {
+            name: 'Moderate',
+            data: [],
+            color: '#FF7171'
+        },{
+            name: 'Major',
+            data: [],
+            color: '#E68EFD'
+        }];
+
+
+    var num = Object.keys(dataArray).length;
+    var Total = 0;
+    $.each(dataArray,function(i,source){
+        floodData[1]['data'].push(source['Minor']);
+        floodData[2]['data'].push(source['Moderate']);
+        floodData[3]['data'].push(source['Major']);
+        floodData[0]['data'].push(source[""]);
+    });
+
+
+    var chart = $('#containerSource').highcharts();
+
+    chart.setTitle({text: "Flooding Data Sources"});
+    chart.xAxis[0].setCategories(labels);
+    $.each(floodData,function(i,obj){
+        chart.addSeries(obj);
+    });
+
+}
+
+function calcFloodsByDecade(floods){
+    var dataArray = {};
+    var borArray = {};
+    $.each(floods, function(i,flood){
+        var year = 1800;
+
+        if(flood['year'] > 1900){
+            year = Math.floor((flood['year']/10))*10;
+        }
+        if(typeof(dataArray[year]) == 'undefined'){
+            dataArray[year] = { Total : 1,
+                                                 Major: 0,
+                                                 Moderate: 0,
+                                                 Minor: 0,
+                                                 "":0
+                                               };
+            dataArray[year][flood['floodSeverity']] = 1;
+        }
+        else{
+            dataArray[year][flood['floodSeverity']] = dataArray[year][flood['floodSeverity']] + 1;
+            dataArray[year]['Total'] = dataArray[year]['Total'] + 1;
+        }
+    });
+
+    var sortable = [];
+    for (var year in dataArray)
+        sortable.push([year, dataArray[year]]);
+
+    sortable.sort(function(a, b) {
+        return parseInt(a[0]) - parseInt(b[0]);
+    })
+
+
+    var labels = [];
+    var floodData =
+        [{
+            name: 'Undefined',
+            data: [],
+            color: "#cccccc"
+        }, {
+            name: 'Minor',
+            data: [],
+            color: '#FFC575'
+        }, {
+            name: 'Moderate',
+            data: [],
+            color: '#FF7171'
+        },{
+            name: 'Major',
+            data: [],
+            color: '#E68EFD'
+        }];
+
+    var num = sortable.length;
+    var Total = 0;
+    for(i=0;i<num;i++){
+        labels.push(sortable[i][0]);
+
+        floodData[1]['data'].push(sortable[i][1]['Minor']);
+        floodData[2]['data'].push(sortable[i][1]['Moderate']);
+        floodData[3]['data'].push(sortable[i][1]['Major']);
+        floodData[0]['data'].push(sortable[i][1][""]);
+    }
+
+    var chart = $('#containerByDecade').highcharts();
+
+    chart.xAxis[0].setCategories(labels);
+    $.each(floodData,function(i,obj){
+        chart.addSeries(obj);
+    });
+
+}
+
+
+function calcCauseFloods(floods,sortby){
+    var dataArray = {};
+    var borArray = {};
+    $.each(floods, function(i,flood){
+        if(typeof(dataArray[flood['fldCause']]) == 'undefined'){
+            dataArray[flood['fldCause']] = { Total : 1,
+                                                 Major: 0,
+                                                 Moderate: 0,
+                                                 Minor: 0,
+                                                 "":0
+                                               };
+            dataArray[flood['fldCause']][flood['floodSeverity']] = 1;
+        }
+        else{
+            dataArray[flood['fldCause']][flood['floodSeverity']] = dataArray[flood['fldCause']][flood['floodSeverity']] + 1;
+            dataArray[flood['fldCause']]['Total'] = dataArray[flood['fldCause']]['Total'] + 1;
+        }
+    });
+
+    var sortable = [];
+    for (var site in dataArray)
+        sortable.push([site, dataArray[site]]);
+
+    sortable.sort(function(a, b) {
+        return b[1][sortby] - a[1][sortby]
+    })
+    $.each(sortable,function(i,array){
+        if(array[0] == "") array[0] = "Undefined";
+    });
+
+    var labels = [];
+    var floodData =
+        [{
+            name: 'Undefined',
+            data: [],
+            color: "#cccccc"
+        }, {
+            name: 'Minor',
+            data: [],
+            color: '#FFC575'
+        }, {
+            name: 'Moderate',
+            data: [],
+            color: '#FF7171'
+        },{
+            name: 'Major',
+            data: [],
+            color: '#E68EFD'
+        }];
+
+    var num = sortable.length;
+    var Total = 0;
+    for(i=0;i<num;i++){
+        labels.push(sortable[i][0]);
+        Total = Total + sortable[i][1]['Total']
+        floodData[1]['data'].push(sortable[i][1]['Minor']);
+        floodData[2]['data'].push(sortable[i][1]['Moderate']);
+        floodData[3]['data'].push(sortable[i][1]['Major']);
+        floodData[0]['data'].push(sortable[i][1][""]);
+    }
+
+    var chart = $('#containerCauses').highcharts();
+    chart.setTitle({text: "Flooding Causes ("+Total+" Floods)"});
+    chart.xAxis[0].setCategories(labels);
+    $.each(floodData,function(i,obj){
+        chart.addSeries(obj);
+    });
+
+}
+
+function calcBorFloods(floods,num,sortby){
+    var dataArray = {};
+    var borArray = {};
+    $.each(floods, function(i,flood){
+        if(typeof(dataArray[flood['Bor_Cen_Ar__']]) == 'undefined'){
+            dataArray[flood['Bor_Cen_Ar__']] = { Total : 1,
+                                                 Major: 0,
+                                                 Moderate: 0,
+                                                 Minor: 0,
+                                                 "":0
+                                               };
+            dataArray[flood['Bor_Cen_Ar__']][flood['floodSeverity']] = 1;
+        }
+        else{
+            dataArray[flood['Bor_Cen_Ar__']][flood['floodSeverity']] = dataArray[flood['Bor_Cen_Ar__']][flood['floodSeverity']] + 1;
+            dataArray[flood['Bor_Cen_Ar__']]['Total'] = dataArray[flood['Bor_Cen_Ar__']]['Total'] + 1;
+        }
+    });
+
+    var sortable = [];
+    for (var site in dataArray)
+        sortable.push([site, dataArray[site]]);
+
+    sortable.sort(function(a, b) {
+        return b[1][sortby] - a[1][sortby]
+    })
+    var labels = [];
+    var floodData =
+        [{
+            name: 'Undefined',
+            data: [],
+            color: "#cccccc"
+        }, {
+            name: 'Minor',
+            data: [],
+            color: '#FFC575'
+        }, {
+            name: 'Moderate',
+            data: [],
+            color: '#FF7171'
+        },{
+            name: 'Major',
+            data: [],
+            color: '#E68EFD'
+        }];
+
+    for(i=0;i<num;i++){
+        labels.push(sortable[i][0]);
+        floodData[1]['data'].push(sortable[i][1]['Minor']);
+        floodData[2]['data'].push(sortable[i][1]['Moderate']);
+        floodData[3]['data'].push(sortable[i][1]['Major']);
+        floodData[0]['data'].push(sortable[i][1][""]);
+    }
+
+    var chart = $('#containerBorough').highcharts();
+
+    chart.setTitle({text: "Top "+num+" Boroughs/Census Areas"});
+    chart.xAxis[0].setCategories(labels);
+    $.each(floodData,function(i,obj){
+        chart.addSeries(obj);
+    });
+
+}
+
+function calcComFloods(floods,num,sortby){
+    var dataArray = {};
+    var borArray = {};
+    $.each(floods, function(i,flood){
+        if(typeof(dataArray[flood['name']]) == 'undefined'){
+            dataArray[flood['name']] = { Total : 1,
+                                                 Major: 0,
+                                                 Moderate: 0,
+                                                 Minor: 0,
+                                                 "":0
+                                               };
+            dataArray[flood['name']][flood['floodSeverity']] = 1;
+        }
+        else{
+            dataArray[flood['name']][flood['floodSeverity']] = dataArray[flood['name']][flood['floodSeverity']] + 1;
+            dataArray[flood['name']]['Total'] = dataArray[flood['name']]['Total'] + 1;
+        }
+    });
+
+    var sortable = [];
+    for (var site in dataArray)
+        sortable.push([site, dataArray[site]]);
+
+    sortable.sort(function(a, b) {
+        return b[1][sortby] - a[1][sortby]
+    })
+    var labels = [];
+    var floodData =
+        [{
+            name: 'Undefined',
+            data: [],
+            color: "#cccccc"
+        }, {
+            name: 'Minor',
+            data: [],
+            color: '#FFC575'
+        }, {
+            name: 'Moderate',
+            data: [],
+            color: '#FF7171'
+        },{
+            name: 'Major',
+            data: [],
+            color: '#E68EFD'
+        }];
+
+    for(i=0;i<num;i++){
+        labels.push(sortable[i][0]);
+        floodData[1]['data'].push(sortable[i][1]['Minor']);
+        floodData[2]['data'].push(sortable[i][1]['Moderate']);
+        floodData[3]['data'].push(sortable[i][1]['Major']);
+        floodData[0]['data'].push(sortable[i][1][""]);
+    }
+
+    var chart = $('#containerCommunity').highcharts();
+    chart.setTitle({text: "Top "+num+" Communities"});
+    chart.xAxis[0].setCategories(labels);
+    $.each(floodData,function(i,obj){
+        chart.addSeries(obj);
+    });
+
+}
+
+function calcNFIP(places){
+    var data = {   name: 'NFIP Status',
+        colorByPoint: true,
+        data: []
+        };
+    var dataArray = {};
+    $.each( places, function( i,place ){
+        if(typeof(dataArray[place['NFIP_Status']]) == 'undefined'){
+            dataArray[place['NFIP_Status']] = 1;
+        }
+        else{
+            dataArray[place['NFIP_Status']] = dataArray[place['NFIP_Status']] + 1;
+        }
+    });
+    $.each(dataArray,function(key,value){
+        data.data.push({name:key,y:((value/places.length)*100)});
+    });
+    var chart = $('#containerNFIP').highcharts();
+    chart.addSeries(data);
+}
+
+
+
+
+</script>
+</head>
+<body>
+    <h3>Summary Stats from Alaska Flood Database</h3>
+    <div class = 'center'>
+        <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
+    </div>
+    <div class="maincontainer">
+        <div id="containerCauses" ></div>
+        <table id="floodTable" class='box-table-a' ></table>
+        <div id="containerSource" ></div>
+        <div id="containerByDecade" ></div>
+
+    </div>
+    <div class="maincontainer">
+        <div id="containerNFIP" ></div>
+        <div id="containerBorough" ></div>
+        <div id="containerCommunity" ></div>
+        <table id="floodCommunityTable" class='box-table-a' ></table>
+
+    </div>
+
+<script>
+Highcharts.chart('containerNFIP', {
+    chart: {
+        plotBackgroundColor: null,
+        plotBorderWidth: null,
+        plotShadow: false,
+        type: 'pie'
+    },
+    credits: {
+        enabled: false
+    },
+
+    title: {
+        text: 'NFIP Participation Summary'
+    },
+    tooltip: {
+        pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b>'
+    },
+    plotOptions: {
+        pie: {
+            allowPointSelect: true,
+            cursor: 'pointer',
+            dataLabels: {
+                enabled: true,
+                format: '<b>{point.name}</b>: {point.percentage:.1f} %',
+                style: {
+                    color: (Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black'
+                }
+            }
+        }
+    },
+    series: null
+
+});
+
+Highcharts.chart('containerBorough', {
+    chart: {
+        type: 'column'
+    },
+    credits: {
+        enabled: false
+    },
+
+
+    xAxis: {
+        categories: ['1', '2', '3', '4', '5','6','7','8','9','10']
+    },
+    yAxis: {
+        min: 0,
+        title: {
+            text: 'Documented Floods'
+        },
+        stackLabels: {
+            enabled: true,
+            style: {
+                fontWeight: 'bold',
+                color: (Highcharts.theme && Highcharts.theme.textColor) || 'gray'
+            }
+        }
+    },
+    legend: {
+        align: 'right',
+        x: -30,
+        verticalAlign: 'top',
+        y: 25,
+        floating: true,
+        backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || 'white',
+        borderColor: '#CCC',
+        borderWidth: 1,
+        shadow: false
+    },
+    tooltip: {
+        headerFormat: '<b>{point.x}</b><br/>',
+        pointFormat: '{series.name}: {point.y}<br/>Total: {point.stackTotal}'
+    },
+    plotOptions: {
+        column: {
+            stacking: 'normal',
+            dataLabels: {
+                enabled: true,
+                color: (Highcharts.theme && Highcharts.theme.dataLabelsColor) || 'white'
+            }
+        }
+    },
+    series: null
+
+});
+
+Highcharts.chart('containerCommunity', {
+    chart: {
+        type: 'column'
+    },
+    credits: {
+        enabled: false
+    },
+
+    yAxis: {
+        min: 0,
+        title: {
+            text: 'Documented Floods'
+        },
+        stackLabels: {
+            enabled: true,
+            style: {
+                fontWeight: 'bold',
+                color: (Highcharts.theme && Highcharts.theme.textColor) || 'gray'
+            }
+        }
+    },
+    legend: {
+        align: 'right',
+        x: -30,
+        verticalAlign: 'top',
+        y: 25,
+        floating: true,
+        backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || 'white',
+        borderColor: '#CCC',
+        borderWidth: 1,
+        shadow: false
+    },
+    tooltip: {
+        headerFormat: '<b>{point.x}</b><br/>',
+        pointFormat: '{series.name}: {point.y}<br/>Total: {point.stackTotal}'
+    },
+    plotOptions: {
+        column: {
+            stacking: 'normal',
+            dataLabels: {
+                enabled: true,
+                color: (Highcharts.theme && Highcharts.theme.dataLabelsColor) || 'white'
+            },
+            point:{
+                 events: {
+                    click: function (event) {
+                        var severity = this.series.name;
+                        if(this.series.name == 'Undefined') severity = ""
+
+                        var floodList = getFloodList(floods,severity,'name',this.category);
+                        makeFloodTable('floodCommunityTable',floods,floodList);
+                    }
+                }
+            }
+        },
+    },
+    series: null
+
+});
+
+Highcharts.chart('containerSource', {
+    chart: {
+        type: 'column'
+    },
+    credits: {
+        enabled: false
+    },
+
+    yAxis: {
+        min: 0,
+        title: {
+            text: 'Documented Floods'
+        },
+        stackLabels: {
+            enabled: true,
+            style: {
+                fontWeight: 'bold',
+                color: (Highcharts.theme && Highcharts.theme.textColor) || 'gray'
+            }
+        }
+    },
+    legend: {
+        align: 'right',
+        x: -30,
+        verticalAlign: 'top',
+        y: 25,
+        floating: true,
+        backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || 'white',
+        borderColor: '#CCC',
+        borderWidth: 1,
+        shadow: false
+    },
+    tooltip: {
+        headerFormat: '<b>{point.x}</b><br/>',
+        pointFormat: '{series.name}: {point.y}<br/>Total: {point.stackTotal}'
+    },
+    plotOptions: {
+        column: {
+            stacking: 'normal',
+            dataLabels: {
+                enabled: true,
+                color: (Highcharts.theme && Highcharts.theme.dataLabelsColor) || 'white'
+            }
+        }
+    },
+    series: null
+
+});
+
+Highcharts.chart('containerCauses', {
+    chart: {
+        type: 'column',
+    },
+    credits: {
+        enabled: false
+    },
+    yAxis: {
+        min: 0,
+        title: {
+            text: 'Documented Floods'
+        },
+        stackLabels: {
+            enabled: true,
+            style: {
+                fontWeight: 'bold',
+                color: (Highcharts.theme && Highcharts.theme.textColor) || 'gray'
+            }
+        }
+    },
+    legend: {
+        align: 'right',
+        x: -30,
+        verticalAlign: 'top',
+        y: 25,
+        floating: true,
+        backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || 'white',
+        borderColor: '#CCC',
+        borderWidth: 1,
+        shadow: false
+    },
+    tooltip: {
+        headerFormat: '<b>{point.x}</b><br/>',
+        pointFormat: '{series.name}: {point.y}<br/>Total: {point.stackTotal}'
+    },
+    plotOptions: {
+        column: {
+            stacking: 'normal',
+            dataLabels: {
+                enabled: true,
+                color: (Highcharts.theme && Highcharts.theme.dataLabelsColor) || 'white'
+            },
+            point:{
+                 events: {
+                    click: function (event) {
+                        var severity = this.series.name;
+                        if(this.series.name == 'Undefined') severity = ""
+
+                        var floodList = getFloodList(floods,severity,'fldCause',this.category);
+                        makeFloodTable('floodTable',floods,floodList);
+                    }
+                }
+            }
+        },
+    },
+    series: null
+
+});
+
+Highcharts.chart('containerByDecade', {
+    chart: {
+        type: 'column'
+    },
+    credits: {
+        enabled: false
+    },
+    title: {
+        text: 'Floods Documented By Decade'
+    },
+    yAxis: {
+        min: 0,
+        title: {
+            text: 'Documented Floods by Decade'
+        },
+        stackLabels: {
+            enabled: true,
+            style: {
+                fontWeight: 'bold',
+                color: (Highcharts.theme && Highcharts.theme.textColor) || 'gray'
+            }
+        }
+    },
+    legend: {
+        align: 'right',
+        x: -30,
+        verticalAlign: 'top',
+        y: 25,
+        floating: true,
+        backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || 'white',
+        borderColor: '#CCC',
+        borderWidth: 1,
+        shadow: false
+    },
+    tooltip: {
+        headerFormat: '<b>{point.x}</b><br/>',
+        pointFormat: '{series.name}: {point.y}<br/>Total: {point.stackTotal}'
+    },
+    plotOptions: {
+        column: {
+            stacking: 'normal',
+            dataLabels: {
+                enabled: true,
+                color: (Highcharts.theme && Highcharts.theme.dataLabelsColor) || 'white'
+            }
+        }
+    },
+    series: null
+
+});
+</script>
+</body>
