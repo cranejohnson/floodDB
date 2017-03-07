@@ -160,6 +160,14 @@ function makeFloodTable(id,floods,floodList){
             var d = {};
             $.each(columns,function(i,val){
                 d[val] = flood[val];
+                if(val == 'stormReportID'){
+                    d[val] = "<a target='_blank' href='https://www.ncdc.noaa.gov/stormevents/eventdetails.jsp?id="+d[val]+"'>"+d[val]+"</a>";
+                }
+                if(val == 'fedDR'){
+                    var fedNum = d[val].replace( /\D+/g, '');
+                    d[val] = "<a target='_blank' href='https://www.fema.gov/disaster/"+fedNum+"'>"+d[val]+"</a>";
+                }
+
             });
             data.push(d);
         }
