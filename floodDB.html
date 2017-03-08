@@ -1,4 +1,4 @@
-<head>
+
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://code.highcharts.com/highcharts.js"></script>
 <script src="https://code.highcharts.com/modules/exporting.js"></script>
@@ -64,6 +64,26 @@ h3 {
 
 var communities = {};
 var floods = {};
+
+function getParameterByName(name, url) {
+        if (!url) url = window.location.href;
+        name = name.replace(/[\[\]]/g, "\\$&");
+        var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+            results = regex.exec(url);
+        if (!results) return null;
+        if (!results[2]) return '';
+        return decodeURIComponent(results[2].replace(/\+/g, " "));
+}
+
+
+var checkCode = getParameterByName('id');
+var host = location.host;
+
+if (!(location.host.includes("140"))){ 
+    if (checkCode != 'draft'){
+       throw new Error("Something went  wrong!");
+    }
+}
 
 //Get Community Table
 $.ajax({
@@ -544,9 +564,8 @@ function calcNFIP(places){
 
 
 </script>
-</head>
-<body>
-    <h3>Summary Stats from Alaska Flood Database</h3>
+
+    <h3>DRAFT - Summary Stats from Alaska Flood Database - DRAFT</h3>
     <div class = 'center'>
         <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
     </div>
@@ -872,4 +891,4 @@ Highcharts.chart('containerByDecade', {
 
 });
 </script>
-</body>
+
