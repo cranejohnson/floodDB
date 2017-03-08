@@ -64,6 +64,7 @@ h3 {
 
 var communities = {};
 var floods = {};
+var hmp = {};
 
 //Get Community Table
 $.ajax({
@@ -83,16 +84,34 @@ $.ajax({
     }
 });
 
+//Get Flood Table
+$.ajax({
+    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=hazardMitigationPlans",
+    dataType: "json",
+    success: function( response ) {
+        hmp = response;
+    }
+});
+
 $(document).ajaxStop(function () {
     console.log('Done Loading');
     calcNFIP(communities);
     $.each(floods,function(i,flood){
+        console.log(flood['name']);
+        console.log(flood);
         var placeID = flood['communitiesID'];
         var result = communities.filter(function( obj ) {
                 return obj.ID == placeID;
             });
+        console.log(result[0]);
+        jQuery.extend(floods[i], result[0]);
+        var result = hmp.filter(function( obj ) {
+                return obj.communityID == placeID;
+            });
+        console.log(result[0]);
         jQuery.extend(floods[i], result[0]);
     });
+
     calcBorFloods(floods,10,'Major');
     calcComFloods(floods,40,'Major');
     calcCauseFloods(floods,'Total');
@@ -166,6 +185,10 @@ function makeFloodTable(id,floods,floodList){
                 if(val == 'fedDR'){
                     var fedNum = d[val].replace( /\D+/g, '');
                     d[val] = "<a target='_blank' href='https://www.fema.gov/disaster/"+fedNum+"'>"+d[val]+"</a>";
+                }
+                if(val == 'impactsHMP'){
+
+                    d[val] = d[val]+"<br><a target=='_blank' href='"+flood['url']+"'>Link to HMP</a>";
                 }
 
             });
