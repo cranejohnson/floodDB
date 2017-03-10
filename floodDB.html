@@ -2,6 +2,8 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://code.highcharts.com/highcharts.js"></script>
 <script src="https://code.highcharts.com/modules/exporting.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.css" type="text/css">
 
 
 <style>
@@ -59,12 +61,116 @@ h3 {
     height: 400px;
     background: black;
 }
+
+     .map {
+         height: 300px;
+          width: 400px;
 </style>
 <script>
 
 var communities = {};
 var floods = {};
 var hmp = {};
+var geoFloods = {
+        "type" : "FeatureCollection",
+        'crs': {
+            'type': 'name',
+            'properties': {
+                'name': 'EPSG:3857'
+            }
+        },
+        "features": []
+    };
+
+
+//////////////////////////Mapping Code//////////////////////////
+function map(gFloods){
+    if(typeof(map) != 'undefined'){
+        var layer = map.getLayersByName('floodLayer');
+        map.removeLayer(layer);
+    }
+
+
+    if (ol.Map.prototype.getLayer === undefined) {
+        ol.Map.prototype.getLayer = function (id) {
+            var layer;
+            this.getLayers().forEach(function (lyr) {
+                if (id == lyr.get('id')) {
+                    layer = lyr;
+                }
+            });
+            return layer;
+        }
+    }
+
+    var osm_default = new ol.layer.Tile({
+          source: new ol.source.XYZ({
+            url: 'https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}'
+          })
+        });
+
+    var osm_default2 = new ol.layer.Tile({
+          source: new ol.source.XYZ({
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}'
+          })
+        });
+
+
+
+    var styles = {
+        'Point': new ol.style.Style({
+          image: new ol.style.Circle({
+            fill: new ol.style.Fill({
+              color: 'rgba(220,20,60,0.4)'
+            }),
+            radius: 3,
+            stroke: new ol.style.Stroke({
+              color: '#ff0',
+              width: 3
+            })
+          })
+        })
+    };
+
+    var styleFunction = function(feature) {
+        return styles[feature.getGeometry().getType()];
+    };
+
+     var vectorSource = new ol.source.Vector({
+        features: (new ol.format.GeoJSON()).readFeatures(gFloods,
+        {
+                    dataProjection: 'EPSG:4326',
+                    featureProjection: 'EPSG:3857'
+                }
+                ),
+      });
+
+
+
+    var vectorLayer = new ol.layer.Vector({
+        source: vectorSource,
+        style: styleFunction,
+        name: 'floodLayer'
+    });
+
+
+
+    var map = new ol.Map({
+        layers: [osm_default2,osm_default,vectorLayer],
+        target: 'map',
+        view: new ol.View({
+            center: ol.proj.transform([-150, 65], 'EPSG:4326', 'EPSG:3857'),
+            zoom: 4
+        })
+    });
+
+    var mousePosition = new ol.control.ScaleLine({
+        units: 'us',
+        minWidth: 100
+    });
+
+    map.addControl(mousePosition);
+}
 
 function getParameterByName(name, url) {
         if (!url) url = window.location.href;
@@ -113,30 +219,48 @@ $.ajax({
     }
 });
 
+function isNumeric(n) {
+  return !isNaN(parseFloat(n)) && isFinite(n);
+}
+
 $(document).ajaxStop(function () {
     console.log('Done Loading');
     calcNFIP(communities);
     $.each(floods,function(i,flood){
-        console.log(flood['name']);
-        console.log(flood);
+        var feature = {
+            "type" : "Feature",
+            "geometry": {},
+            "properties": flood
+        }
+
         var placeID = flood['communitiesID'];
         var result = communities.filter(function( obj ) {
                 return obj.ID == placeID;
             });
-        console.log(result[0]);
+        //jQuery.extend(feature.properties,result[0]);
         jQuery.extend(floods[i], result[0]);
         var result = hmp.filter(function( obj ) {
                 return obj.communityID == placeID;
             });
-        console.log(result[0]);
+        //jQuery.extend(feature.properties,result[0]);
         jQuery.extend(floods[i], result[0]);
-    });
+        feature.geometry.type = "Point";
+        feature.geometry.coordinates = [feature.properties.Lon,feature.properties.Lat];
+        if(isNumeric(feature.properties.Lon)){
+            geoFloods.features.push(feature);
+        }
+        else{
+            console.log(feature);
+        }
 
+    });
+    //console.log(JSON.stringify(geoFloods));
     calcBorFloods(floods,10,'Major');
     calcComFloods(floods,40,'Major');
     calcCauseFloods(floods,'Total');
     calcSourceFloods(floods);
     calcFloodsByDecade(floods);
+    map(geoFloods);
 
 
 });
@@ -194,11 +318,12 @@ function addAllColumnHeaders(myList, selector) {
 function makeFloodTable(id,floods,floodList){
     var columns = ['floodsID','name','year','month','fldCause','floodSeverity','impactsHMP','impactsRiverNotes','impactsStormReports','fedDR','stateDR','stormReportID'];
     var data = [];
-    $.each(floods,function(i,flood){
-        if(floodList.indexOf(flood['floodsID'])>-1){
+    console.log(geoFloods);
+    $.each(geoFloods.features,function(i,flood){
+        if(floodList.indexOf(flood.properties.floodsID)>-1){
             var d = {};
             $.each(columns,function(i,val){
-                d[val] = flood[val];
+                d[val] = flood.properties[val];
                 if(val == 'stormReportID'){
                     d[val] = "<a target='_blank' href='https://www.ncdc.noaa.gov/stormevents/eventdetails.jsp?id="+d[val]+"'>"+d[val]+"</a>";
                 }
@@ -208,7 +333,7 @@ function makeFloodTable(id,floods,floodList){
                 }
                 if(val == 'impactsHMP'){
 
-                    d[val] = d[val]+"<br><a target=='_blank' href='"+flood['url']+"'>Link to HMP</a>";
+                    d[val] = d[val]+"<br><a target=='_blank' href='"+flood.properties.url+"'>Link to HMP</a>";
                 }
 
             });
@@ -593,6 +718,7 @@ function calcNFIP(places){
         <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
     </div>
     <div class="maincontainer">
+        <div id='map'></div>
         <div id="containerCauses" ></div>
         <table id="floodTable" class='box-table-a' ></table>
         <div id="containerSource" ></div>
