@@ -4,7 +4,9 @@
 <script src="https://code.highcharts.com/modules/exporting.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.css" type="text/css">
-
+<script src="https://code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
+<script src="https://www.weather.gov/source/aprfc/js/jquery.ui.slider.custom.js"></script>
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 
 <style>
 
@@ -62,14 +64,29 @@ h3 {
     background: black;
 }
 
-     .map {
-         height: 300px;
-          width: 400px;
+.map {
+    height: 300px;
+    width: 400px;
+}
+
+#qmeas-years{
+    text-align: center;
+    width: 400;
+    margin: auto;
+}
+
+.ui-slider .ui-slider-handle{
+        width:10px;
+
+}
+
 </style>
 <script>
 
 var communities = {};
+
 var floods = {};
+var layersByName = {};
 var hmp = {};
 var geoFloods = {
         "type" : "FeatureCollection",
@@ -82,40 +99,65 @@ var geoFloods = {
         "features": []
     };
 
-
-//////////////////////////Mapping Code//////////////////////////
-function map(gFloods){
-    if(typeof(map) != 'undefined'){
-        var layer = map.getLayersByName('floodLayer');
-        map.removeLayer(layer);
-    }
-
-
-    if (ol.Map.prototype.getLayer === undefined) {
-        ol.Map.prototype.getLayer = function (id) {
-            var layer;
-            this.getLayers().forEach(function (lyr) {
-                if (id == lyr.get('id')) {
-                    layer = lyr;
-                }
-            });
-            return layer;
+$( function() {
+    $( "#qmeas-years" ).dragslider({
+        range: true,
+        min: 1889,
+        max: 2017,
+        rangeDrag: true, // Enable range dragging.
+        step: 1,
+        values: [1889,2017],
+        slide: function( event, ui ) {
+            $( "#years2show" ).val(ui.values[0]+ " - " +ui.values[1]);
+            mapFloods(geoFloods);
+        },
+        stop: function( event, ui ) {
+            $( "#years2show" ).val(ui.values[0]+ " - " +ui.values[1]);
+            mapFloods(geoFloods);
         }
-    }
-
-    var osm_default = new ol.layer.Tile({
-          source: new ol.source.XYZ({
-            url: 'https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}'
-          })
-        });
-
-    var osm_default2 = new ol.layer.Tile({
-          source: new ol.source.XYZ({
-            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}'
-          })
-        });
+    });
+} );
 
 
+
+function removeTOCLayer(ss) {
+  map.removeLayer(layersByName[ss]);
+}
+
+$(document).ready(function(){
+    $("input[type='checkbox']").on('change', function(){
+         mapFloods(geoFloods);
+    });
+
+});
+//////////////////////////Mapping Code//////////////////////////
+function mapFloods(gFloods){
+
+    var beginYear = $("#qmeas-years").dragslider("values",0);
+    var endYear = $("#qmeas-years").dragslider("values",1);
+
+    var floodSeverity = [];
+    $.each($("input[name='severity[]']:checked"), function() {
+        floodSeverity.push($(this).val());
+    });
+
+    console.log(beginYear,endYear);
+    removeTOCLayer('floodLayer');
+
+    var plotFloods = $.extend(true, {}, gFloods);
+    var matchFeatures = [];
+    $.each(gFloods.features,function(i,flood){
+        if(typeof(flood) != 'undefined'){
+            if($.inArray(flood.properties.floodSeverity,floodSeverity)>-1){
+                if((flood.properties.year>=beginYear)&&(flood.properties.year <= endYear)){
+                    matchFeatures.push(flood);
+                }
+            }
+        }
+    });
+
+    plotFloods.features = matchFeatures;
+    console.log(plotFloods.features.length);
 
     var styles = {
         'Point': new ol.style.Style({
@@ -136,8 +178,9 @@ function map(gFloods){
         return styles[feature.getGeometry().getType()];
     };
 
+
      var vectorSource = new ol.source.Vector({
-        features: (new ol.format.GeoJSON()).readFeatures(gFloods,
+        features: (new ol.format.GeoJSON()).readFeatures(plotFloods,
         {
                     dataProjection: 'EPSG:4326',
                     featureProjection: 'EPSG:3857'
@@ -145,31 +188,45 @@ function map(gFloods){
                 ),
       });
 
+    var clusterSource = new ol.source.Cluster({
+        distance: 10,
+        source: vectorSource
+      });
 
-
+    var styleCache = {};
     var vectorLayer = new ol.layer.Vector({
-        source: vectorSource,
-        style: styleFunction,
+        source: clusterSource,
+        style: function(feature) {
+          var size = feature.get('features').length;
+          var style = styleCache[size];
+          if (!style) {
+            style = new ol.style.Style({
+              image: new ol.style.Circle({
+                radius: 10,
+                stroke: new ol.style.Stroke({
+                  color: '#fff'
+                }),
+                fill: new ol.style.Fill({
+                  color: '#3399CC'
+                })
+              }),
+              text: new ol.style.Text({
+                text: size.toString(),
+                fill: new ol.style.Fill({
+                  color: '#fff'
+                })
+              })
+            });
+            styleCache[size] = style;
+          }
+          return style;
+        },
         name: 'floodLayer'
     });
 
+    layersByName['floodLayer'] = vectorLayer;
+    map.addLayer(vectorLayer);
 
-
-    var map = new ol.Map({
-        layers: [osm_default2,osm_default,vectorLayer],
-        target: 'map',
-        view: new ol.View({
-            center: ol.proj.transform([-150, 65], 'EPSG:4326', 'EPSG:3857'),
-            zoom: 4
-        })
-    });
-
-    var mousePosition = new ol.control.ScaleLine({
-        units: 'us',
-        minWidth: 100
-    });
-
-    map.addControl(mousePosition);
 }
 
 function getParameterByName(name, url) {
@@ -186,7 +243,7 @@ function getParameterByName(name, url) {
 var checkCode = getParameterByName('id');
 var host = location.host;
 
-if (!(location.host.includes("140"))){ 
+if (!(location.host.includes("140"))){
     if (checkCode != 'draft'){
        throw new Error("Something went  wrong!");
     }
@@ -224,6 +281,7 @@ function isNumeric(n) {
 }
 
 $(document).ajaxStop(function () {
+    $( "#years2show" ).val('1890 - 2017');
     console.log('Done Loading');
     calcNFIP(communities);
     $.each(floods,function(i,flood){
@@ -246,28 +304,31 @@ $(document).ajaxStop(function () {
         jQuery.extend(floods[i], result[0]);
         feature.geometry.type = "Point";
         feature.geometry.coordinates = [feature.properties.Lon,feature.properties.Lat];
+        if(feature.properties.floodSeverity == "") feature.properties.floodSeverity = 'Undefined';
         if(isNumeric(feature.properties.Lon)){
             geoFloods.features.push(feature);
+
         }
         else{
-            console.log(feature);
+            //console.log(feature);
         }
 
     });
-    //console.log(JSON.stringify(geoFloods));
+    console.log(geoFloods.features.length);
+    console.log(floods.length);
     calcBorFloods(floods,10,'Major');
     calcComFloods(floods,40,'Major');
     calcCauseFloods(floods,'Total');
     calcSourceFloods(floods);
     calcFloodsByDecade(floods);
-    map(geoFloods);
+    mapFloods(geoFloods);
 
 
 });
 
 function getFloodList(floods,severity,filter,value){
     var floodList = [];
-    if(value == 'Undefined') value = "";
+    if(value == 'Undefined');
     $.each(floods,function(i,flood){
         if((flood['floodSeverity'] == severity) &&(flood[filter] == value)){
             floodList.push(flood['floodsID']);
@@ -361,7 +422,7 @@ function calcSourceFloods(floods){
                                 Major: 0,
                                 Moderate: 0,
                                 Minor: 0,
-                                "":0
+                                "Undefined":0
                                     };
     });
 
@@ -402,7 +463,7 @@ function calcSourceFloods(floods){
         floodData[1]['data'].push(source['Minor']);
         floodData[2]['data'].push(source['Moderate']);
         floodData[3]['data'].push(source['Major']);
-        floodData[0]['data'].push(source[""]);
+        floodData[0]['data'].push(source["Undefined"]);
     });
 
 
@@ -430,7 +491,7 @@ function calcFloodsByDecade(floods){
                                                  Major: 0,
                                                  Moderate: 0,
                                                  Minor: 0,
-                                                 "":0
+                                                 Undefined:0
                                                };
             dataArray[year][flood['floodSeverity']] = 1;
         }
@@ -477,7 +538,7 @@ function calcFloodsByDecade(floods){
         floodData[1]['data'].push(sortable[i][1]['Minor']);
         floodData[2]['data'].push(sortable[i][1]['Moderate']);
         floodData[3]['data'].push(sortable[i][1]['Major']);
-        floodData[0]['data'].push(sortable[i][1][""]);
+        floodData[0]['data'].push(sortable[i][1]["Undefined"]);
     }
 
     var chart = $('#containerByDecade').highcharts();
@@ -499,7 +560,7 @@ function calcCauseFloods(floods,sortby){
                                                  Major: 0,
                                                  Moderate: 0,
                                                  Minor: 0,
-                                                 "":0
+                                                 Undefined:0
                                                };
             dataArray[flood['fldCause']][flood['floodSeverity']] = 1;
         }
@@ -548,7 +609,7 @@ function calcCauseFloods(floods,sortby){
         floodData[1]['data'].push(sortable[i][1]['Minor']);
         floodData[2]['data'].push(sortable[i][1]['Moderate']);
         floodData[3]['data'].push(sortable[i][1]['Major']);
-        floodData[0]['data'].push(sortable[i][1][""]);
+        floodData[0]['data'].push(sortable[i][1]['Undefined']);
     }
 
     var chart = $('#containerCauses').highcharts();
@@ -569,7 +630,7 @@ function calcBorFloods(floods,num,sortby){
                                                  Major: 0,
                                                  Moderate: 0,
                                                  Minor: 0,
-                                                 "":0
+                                                 Undefined:0
                                                };
             dataArray[flood['Bor_Cen_Ar__']][flood['floodSeverity']] = 1;
         }
@@ -611,7 +672,7 @@ function calcBorFloods(floods,num,sortby){
         floodData[1]['data'].push(sortable[i][1]['Minor']);
         floodData[2]['data'].push(sortable[i][1]['Moderate']);
         floodData[3]['data'].push(sortable[i][1]['Major']);
-        floodData[0]['data'].push(sortable[i][1][""]);
+        floodData[0]['data'].push(sortable[i][1]['Undefined']);
     }
 
     var chart = $('#containerBorough').highcharts();
@@ -633,7 +694,7 @@ function calcComFloods(floods,num,sortby){
                                                  Major: 0,
                                                  Moderate: 0,
                                                  Minor: 0,
-                                                 "":0
+                                                 Undefined:0
                                                };
             dataArray[flood['name']][flood['floodSeverity']] = 1;
         }
@@ -675,7 +736,7 @@ function calcComFloods(floods,num,sortby){
         floodData[1]['data'].push(sortable[i][1]['Minor']);
         floodData[2]['data'].push(sortable[i][1]['Moderate']);
         floodData[3]['data'].push(sortable[i][1]['Major']);
-        floodData[0]['data'].push(sortable[i][1][""]);
+        floodData[0]['data'].push(sortable[i][1]['Undefined']);
     }
 
     var chart = $('#containerCommunity').highcharts();
@@ -714,8 +775,17 @@ function calcNFIP(places){
 </script>
 
     <h3>DRAFT - Summary Stats from Alaska Flood Database - DRAFT</h3>
+
     <div class = 'center'>
         <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
+        <div style="float:center;"><label for="years2show">Years to Show:</label>
+        <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
+        <div id="qmeas-years"  style="width: 300px;float:center;"></div></div>
+        <br>
+        <input type="checkbox" name="severity[]" value="Major" checked>Major
+        <input type="checkbox" name="severity[]" value="Moderate" checked>Moderate
+        <input type="checkbox" name="severity[]" value="Minor" checked>Minor
+        <input type="checkbox" name="severity[]" value="Undefined" checked>Undefined
     </div>
     <div class="maincontainer">
         <div id='map'></div>
@@ -867,9 +937,6 @@ Highcharts.chart('containerCommunity', {
             point:{
                  events: {
                     click: function (event) {
-                        var severity = this.series.name;
-                        if(this.series.name == 'Undefined') severity = ""
-
                         var floodList = getFloodList(floods,severity,'name',this.category);
                         makeFloodTable('floodCommunityTable',floods,floodList);
                     }
@@ -975,9 +1042,6 @@ Highcharts.chart('containerCauses', {
             point:{
                  events: {
                     click: function (event) {
-                        var severity = this.series.name;
-                        if(this.series.name == 'Undefined') severity = ""
-
                         var floodList = getFloodList(floods,severity,'fldCause',this.category);
                         makeFloodTable('floodTable',floods,floodList);
                     }
@@ -1039,5 +1103,51 @@ Highcharts.chart('containerByDecade', {
     series: null
 
 });
+
+var osm_default = new ol.layer.Tile({
+      source: new ol.source.XYZ({
+        url: 'https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}'
+      })
+    });
+
+var osm_default2 = new ol.layer.Tile({
+      source: new ol.source.XYZ({
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}'
+      })
+    });
+
+if (ol.Map.prototype.getLayer === undefined) {
+    ol.Map.prototype.getLayer = function (id) {
+        var layer;
+        this.getLayers().forEach(function (lyr) {
+            if (id == lyr.get('id')) {
+                layer = lyr;
+            }
+        });
+        return layer;
+    }
+}
+
+
+
+
+var map = new ol.Map({
+    layers: [osm_default2,osm_default],
+    target: 'map',
+    view: new ol.View({
+        center: ol.proj.transform([-150, 65], 'EPSG:4326', 'EPSG:3857'),
+        zoom: 5
+    })
+});
+
+var mousePosition = new ol.control.ScaleLine({
+    units: 'us',
+    minWidth: 100
+});
+
+map.addControl(mousePosition);
+
+console.log('Built map');
+
 </script>
 
