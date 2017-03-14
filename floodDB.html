@@ -38,7 +38,7 @@
     background:#d0dafd;
     color:#339;}
 
-h3 {
+h4 {
     text-align: center;
 }
 
@@ -88,6 +88,7 @@ var communities = {};
 var floods = {};
 var layersByName = {};
 var hmp = {};
+var roads = {};
 var geoFloods = {
         "type" : "FeatureCollection",
         'crs': {
@@ -119,17 +120,14 @@ $( function() {
 } );
 
 
-
-function removeTOCLayer(ss) {
-  map.removeLayer(layersByName[ss]);
-}
-
 $(document).ready(function(){
     $("input[type='checkbox']").on('change', function(){
          mapFloods(geoFloods);
     });
 
 });
+
+
 //////////////////////////Mapping Code//////////////////////////
 function mapFloods(gFloods){
 
@@ -141,16 +139,23 @@ function mapFloods(gFloods){
         floodSeverity.push($(this).val());
     });
 
+    var floodCause = [];
+    $.each($("input[name='cause[]']:checked"), function() {
+        floodCause.push($(this).val());
+    });
+
     console.log(beginYear,endYear);
-    removeTOCLayer('floodLayer');
+    map.removeLayer(layersByName['floodLayer']);
 
     var plotFloods = $.extend(true, {}, gFloods);
     var matchFeatures = [];
     $.each(gFloods.features,function(i,flood){
         if(typeof(flood) != 'undefined'){
-            if($.inArray(flood.properties.floodSeverity,floodSeverity)>-1){
-                if((flood.properties.year>=beginYear)&&(flood.properties.year <= endYear)){
-                    matchFeatures.push(flood);
+            if($.inArray(flood.properties.fldCause,floodCause)>-1){
+                if($.inArray(flood.properties.floodSeverity,floodSeverity)>-1){
+                    if((flood.properties.year>=beginYear)&&(flood.properties.year <= endYear)){
+                        matchFeatures.push(flood);
+                    }
                 }
             }
         }
@@ -158,6 +163,7 @@ function mapFloods(gFloods){
 
     plotFloods.features = matchFeatures;
     console.log(plotFloods.features.length);
+    $('#numberPlotted').text('Events Mapped: '+plotFloods.features.length);
 
     var styles = {
         'Point': new ol.style.Style({
@@ -243,11 +249,11 @@ function getParameterByName(name, url) {
 var checkCode = getParameterByName('id');
 var host = location.host;
 
-if (!(location.host.includes("140"))){
-    if (checkCode != 'draft'){
-       throw new Error("Something went  wrong!");
-    }
-}
+// if (!(location.host.includes("140"))){
+//     if (checkCode != 'draft'){
+//        throw new Error("Something went  wrong!");
+//     }
+// }
 
 //Get Community Table
 $.ajax({
@@ -273,6 +279,15 @@ $.ajax({
     dataType: "json",
     success: function( response ) {
         hmp = response;
+    }
+});
+
+//Get road Table
+$.ajax({
+    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=AKroads",
+    dataType: "json",
+    success: function( response ) {
+        roads = response;
     }
 });
 
@@ -303,9 +318,24 @@ $(document).ajaxStop(function () {
         //jQuery.extend(feature.properties,result[0]);
         jQuery.extend(floods[i], result[0]);
         feature.geometry.type = "Point";
-        feature.geometry.coordinates = [feature.properties.Lon,feature.properties.Lat];
+        if(feature.properties.communitiesID == ""){
+            if(feature.properties.road != ""){
+                $.each(roads,function(i,road){
+                    if((road.ROUTE_NAME == feature.properties.road) && (road.MP == feature.properties.milePost)){
+                        console.log(road.ROUTE_NAME,road.MP);
+                        feature.geometry.coordinates = [road.LON,road.LAT];
+                        console.log(feature.geometry.coordinates);
+                        return true;
+                     }
+                });
+            }
+        }
+        else{
+            feature.geometry.coordinates = [feature.properties.Lon,feature.properties.Lat];
+        }
         if(feature.properties.floodSeverity == "") feature.properties.floodSeverity = 'Undefined';
-        if(isNumeric(feature.properties.Lon)){
+        if(feature.properties.fldCause == "") feature.properties.fldCause = 'undefined';
+        if(typeof(feature.geometry.coordinates) != 'undefined'){
             geoFloods.features.push(feature);
 
         }
@@ -774,18 +804,28 @@ function calcNFIP(places){
 
 </script>
 
-    <h3>DRAFT - Summary Stats from Alaska Flood Database - DRAFT</h3>
+    <h4>DRAFT - Summary Stats from Alaska Flood Database - DRAFT</h4>
 
     <div class = 'center'>
         <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
         <div style="float:center;"><label for="years2show">Years to Show:</label>
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
+        <span id='numberPlotted'></span>
         <div id="qmeas-years"  style="width: 300px;float:center;"></div></div>
-        <br>
+
         <input type="checkbox" name="severity[]" value="Major" checked>Major
         <input type="checkbox" name="severity[]" value="Moderate" checked>Moderate
         <input type="checkbox" name="severity[]" value="Minor" checked>Minor
-        <input type="checkbox" name="severity[]" value="Undefined" checked>Undefined
+        <input type="checkbox" name="severity[]" value="Undefined" checked>Undefined<br>
+        <input type="checkbox" class = 'cause' name="cause[]" value="rainfall" checked>Rainfall
+        <input type="checkbox" class = 'cause' name="cause[]" value="ice jam" checked>Ice Jam
+        <input type="checkbox" class = 'cause' name="cause[]" value="coastal" checked>Coastal
+        <input type="checkbox" class = 'cause' name="cause[]" value="snowmelt" checked>Snowmelt
+        <input type="checkbox" class = 'cause' name="cause[]" value="GDL" checked>Glacial-Dammed Lake
+        <input type="checkbox" class = 'cause' name="cause[]" value="overflow" checked>Overflow
+        <input type="checkbox" class = 'cause' name="cause[]" value="undefined" checked>Undefined
+        <button type="button" id="uncheckCause" onclick ="$('.cause').prop('checked', false);mapFloods(geoFloods);">Uncheck All</button><br>
+
     </div>
     <div class="maincontainer">
         <div id='map'></div>
@@ -937,6 +977,7 @@ Highcharts.chart('containerCommunity', {
             point:{
                  events: {
                     click: function (event) {
+                        var severity = this.series.name;
                         var floodList = getFloodList(floods,severity,'name',this.category);
                         makeFloodTable('floodCommunityTable',floods,floodList);
                     }
@@ -1042,6 +1083,7 @@ Highcharts.chart('containerCauses', {
             point:{
                  events: {
                     click: function (event) {
+                        var severity = this.series.name;
                         var floodList = getFloodList(floods,severity,'fldCause',this.category);
                         makeFloodTable('floodTable',floods,floodList);
                     }
@@ -1128,15 +1170,30 @@ if (ol.Map.prototype.getLayer === undefined) {
     }
 }
 
+var mousePositionControl = new ol.control.MousePosition({
+    coordinateFormat: ol.coordinate.createStringXY(4),
+    projection: 'EPSG:4326',
+    // comment the following two lines to have the mouse position
+    // be placed within the map.
+    //className: 'custom-mouse-position',
+    //target: document.getElementById('mouse-position'),
+    undefinedHTML: '&nbsp;'
+});
 
 
 
 var map = new ol.Map({
+    controls: ol.control.defaults({
+        attributionOptions: /** @type {olx.control.AttributionOptions} */
+        ({
+            collapsible: false
+          })
+    }).extend([mousePositionControl]),
     layers: [osm_default2,osm_default],
     target: 'map',
     view: new ol.View({
         center: ol.proj.transform([-150, 65], 'EPSG:4326', 'EPSG:3857'),
-        zoom: 5
+        zoom: 4
     })
 });
 
