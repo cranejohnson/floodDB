@@ -2,11 +2,18 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://code.highcharts.com/highcharts.js"></script>
 <script src="https://code.highcharts.com/modules/exporting.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/openlayers/4.0.1/ol.css" type="text/css">
+
 <script src="https://code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
 <script src="https://www.weather.gov/source/aprfc/js/jquery.ui.slider.custom.js"></script>
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.1/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.0.1/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.css"/>
+<script src="https://unpkg.com/leaflet.icon.glyph@latest"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.Default.css"/>
+<script src="https://unpkg.com/leaflet.markercluster@1.0.4/dist/leaflet.markercluster.js"></script>
 
 <style>
 
@@ -69,6 +76,14 @@ h4 {
     width: 400px;
 }
 
+#mapid {
+    height   : 500px;
+    width    : 100%;
+    margin   : 0px;
+    padding  : 0px;
+    overflow : hidden;
+},
+
 #qmeas-years{
     text-align: center;
     width: 400;
@@ -89,6 +104,7 @@ var floods = {};
 var layersByName = {};
 var hmp = {};
 var roads = {};
+var map = {};
 var geoFloods = {
         "type" : "FeatureCollection",
         'crs': {
@@ -129,6 +145,19 @@ $(document).ready(function(){
 
 
 //////////////////////////Mapping Code//////////////////////////
+
+function onEachFeature(feature, layer) {
+		var popupContent = "<p>I started out as a GeoJSON " +
+				feature.geometry.type + ", but now I'm a Leaflet vector!</p>";
+
+// 		if (feature.properties && feature.properties.popupContent) {
+// 			popupContent += feature.properties.popupContent;
+// 		}
+
+		layer.bindPopup(popupContent);
+	}
+
+
 function mapFloods(gFloods){
 
     var beginYear = $("#qmeas-years").dragslider("values",0);
@@ -145,7 +174,11 @@ function mapFloods(gFloods){
     });
 
     console.log(beginYear,endYear);
-    map.removeLayer(layersByName['floodLayer']);
+    console.log(typeof(layersByName['floodLayer'] ));
+    if(typeof(layersByName['floodLayer'] ) != 'undefined'){
+        console.log(map.removeLayer(layersByName['floodLayer']));
+        console.log('removed');
+    }
 
     var plotFloods = $.extend(true, {}, gFloods);
     var matchFeatures = [];
@@ -165,74 +198,35 @@ function mapFloods(gFloods){
     console.log(plotFloods.features.length);
     $('#numberPlotted').text('Events Mapped: '+plotFloods.features.length);
 
-    var styles = {
-        'Point': new ol.style.Style({
-          image: new ol.style.Circle({
-            fill: new ol.style.Fill({
-              color: 'rgba(220,20,60,0.4)'
-            }),
-            radius: 3,
-            stroke: new ol.style.Stroke({
-              color: '#ff0',
-              width: 3
-            })
-          })
-        })
-    };
 
-    var styleFunction = function(feature) {
-        return styles[feature.getGeometry().getType()];
-    };
-
-
-     var vectorSource = new ol.source.Vector({
-        features: (new ol.format.GeoJSON()).readFeatures(plotFloods,
-        {
-                    dataProjection: 'EPSG:4326',
-                    featureProjection: 'EPSG:3857'
-                }
-                ),
-      });
-
-    var clusterSource = new ol.source.Cluster({
-        distance: 10,
-        source: vectorSource
-      });
-
-    var styleCache = {};
-    var vectorLayer = new ol.layer.Vector({
-        source: clusterSource,
-        style: function(feature) {
-          var size = feature.get('features').length;
-          var style = styleCache[size];
-          if (!style) {
-            style = new ol.style.Style({
-              image: new ol.style.Circle({
-                radius: 10,
-                stroke: new ol.style.Stroke({
-                  color: '#fff'
-                }),
-                fill: new ol.style.Fill({
-                  color: '#3399CC'
-                })
-              }),
-              text: new ol.style.Text({
-                text: size.toString(),
-                fill: new ol.style.Fill({
-                  color: '#fff'
-                })
-              })
-            });
-            styleCache[size] = style;
-          }
-          return style;
-        },
-        name: 'floodLayer'
+    var markers = L.markerClusterGroup({
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        maxClusterRadius: 30
     });
 
-    layersByName['floodLayer'] = vectorLayer;
-    map.addLayer(vectorLayer);
+    var geoJsonLayer = L.geoJSON(plotFloods, {
+        style: function (feature) {
+            return {color: 'red'};
+        },
+		onEachFeature: function (feature, layer) {
+              layer.bindPopup(feature.properties.name);
+          },
+        pointToLayer: function(feature, latlng) {
+        return L.marker(latlng, {
+          icon: L.icon.glyph({
+            prefix: '',
+            glyph: feature.properties.floodsID
+          })
+        })
+      }
+	});
 
+
+
+	markers.addLayer(geoJsonLayer);
+	layersByName['floodLayer'] = markers;
+    map.addLayer(markers);
 }
 
 function getParameterByName(name, url) {
@@ -249,11 +243,6 @@ function getParameterByName(name, url) {
 var checkCode = getParameterByName('id');
 var host = location.host;
 
-// if (!(location.host.includes("140"))){
-//     if (checkCode != 'draft'){
-//        throw new Error("Something went  wrong!");
-//     }
-// }
 
 //Get Community Table
 $.ajax({
@@ -806,12 +795,12 @@ function calcNFIP(places){
 
     <h4>DRAFT - Summary Stats from Alaska Flood Database - DRAFT</h4>
 
-    <div class = 'center'>
+<div class = 'center'>
         <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
         <div style="float:center;"><label for="years2show">Years to Show:</label>
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
         <span id='numberPlotted'></span>
-        <div id="qmeas-years"  style="width: 300px;float:center;"></div></div>
+        <div id="qmeas-years"  style="width: 300px;"></div>
 
         <input type="checkbox" name="severity[]" value="Major" checked>Major
         <input type="checkbox" name="severity[]" value="Moderate" checked>Moderate
@@ -828,7 +817,8 @@ function calcNFIP(places){
 
     </div>
     <div class="maincontainer">
-        <div id='map'></div>
+        <div id="mapid"></div>
+
         <div id="containerCauses" ></div>
         <table id="floodTable" class='box-table-a' ></table>
         <div id="containerSource" ></div>
@@ -1146,63 +1136,23 @@ Highcharts.chart('containerByDecade', {
 
 });
 
-var osm_default = new ol.layer.Tile({
-      source: new ol.source.XYZ({
-        url: 'https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}'
-      })
-    });
 
-var osm_default2 = new ol.layer.Tile({
-      source: new ol.source.XYZ({
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}'
-      })
-    });
-
-if (ol.Map.prototype.getLayer === undefined) {
-    ol.Map.prototype.getLayer = function (id) {
-        var layer;
-        this.getLayers().forEach(function (lyr) {
-            if (id == lyr.get('id')) {
-                layer = lyr;
-            }
-        });
-        return layer;
-    }
-}
-
-var mousePositionControl = new ol.control.MousePosition({
-    coordinateFormat: ol.coordinate.createStringXY(4),
-    projection: 'EPSG:4326',
-    // comment the following two lines to have the mouse position
-    // be placed within the map.
-    //className: 'custom-mouse-position',
-    //target: document.getElementById('mouse-position'),
-    undefinedHTML: '&nbsp;'
+// create map with ESRI World Terrain Base, Streamer Ocean, Streamer HydroBaseMapForTerrain, and Streamer Mask layers
+map = new L.Map( "mapid", {
+    "minZoom" : 4,
+    "maxZoom" : 11,
+    "layers"  : [
+        L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" ),
+        L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}" ),
+        L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}" ),
+        L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2} )
+    ],
+    "center"  : new L.LatLng(65,-150),
+    "zoom"    : 4,
+    "attributionControl" : false
 });
 
 
-
-var map = new ol.Map({
-    controls: ol.control.defaults({
-        attributionOptions: /** @type {olx.control.AttributionOptions} */
-        ({
-            collapsible: false
-          })
-    }).extend([mousePositionControl]),
-    layers: [osm_default2,osm_default],
-    target: 'map',
-    view: new ol.View({
-        center: ol.proj.transform([-150, 65], 'EPSG:4326', 'EPSG:3857'),
-        zoom: 4
-    })
-});
-
-var mousePosition = new ol.control.ScaleLine({
-    units: 'us',
-    minWidth: 100
-});
-
-map.addControl(mousePosition);
 
 console.log('Built map');
 
