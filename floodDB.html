@@ -173,8 +173,6 @@ function mapFloods(gFloods){
         floodCause.push($(this).val());
     });
 
-    console.log(beginYear,endYear);
-    console.log(typeof(layersByName['floodLayer'] ));
     if(typeof(layersByName['floodLayer'] ) != 'undefined'){
         console.log(map.removeLayer(layersByName['floodLayer']));
         console.log('removed');
@@ -202,25 +200,49 @@ function mapFloods(gFloods){
     var markers = L.markerClusterGroup({
         spiderfyOnMaxZoom: true,
         showCoverageOnHover: false,
-        maxClusterRadius: 30
+        maxClusterRadius: 1
     });
+
 
     var geoJsonLayer = L.geoJSON(plotFloods, {
         style: function (feature) {
             return {color: 'red'};
         },
 		onEachFeature: function (feature, layer) {
-              layer.bindPopup(feature.properties.name);
+              //layer.bindPopup(feature.properties.name);
+              layer.on({
+                click:markerClick
+               });
           },
         pointToLayer: function(feature, latlng) {
         return L.marker(latlng, {
-          icon: L.icon.glyph({
-            prefix: '',
-            glyph: feature.properties.floodsID
-          })
+            icon: L.icon.glyph({
+                prefix: '',
+                glyph: feature.properties.floodsID
+            })
         })
       }
 	});
+
+//     var geojsonMarkerOptions = {
+//         radius: 8,
+//         fillColor: "#ff7800",
+//         color: "#000",
+//         weight: 1,
+//         opacity: 1,
+//         fillOpacity: 0.8
+//     };
+//
+//     L.geoJSON(plotFloods, {
+//         pointToLayer: function(feature, latlng) {
+//         return L.marker(latlng, {
+//             icon: L.icon.glyph({
+//                 prefix: '',
+//                 glyph: feature.properties.floodsID
+//             })
+//         })
+//        }
+//     }).addTo(map);
 
 
 
@@ -228,6 +250,19 @@ function mapFloods(gFloods){
 	layersByName['floodLayer'] = markers;
     map.addLayer(markers);
 }
+
+function markerClick(e) {
+  var floodList = [];
+  $.each(floods,function(i,flood){
+        if(flood['communitiesID'] == e.target.feature.properties.communitiesID){
+            floodList.push(flood['floodsID']);
+        }
+    });
+
+
+  makeFloodTable('floodMapTable',floods,floodList);
+ }
+
 
 function getParameterByName(name, url) {
         if (!url) url = window.location.href;
@@ -311,9 +346,7 @@ $(document).ajaxStop(function () {
             if(feature.properties.road != ""){
                 $.each(roads,function(i,road){
                     if((road.ROUTE_NAME == feature.properties.road) && (road.MP == feature.properties.milePost)){
-                        console.log(road.ROUTE_NAME,road.MP);
                         feature.geometry.coordinates = [road.LON,road.LAT];
-                        console.log(feature.geometry.coordinates);
                         return true;
                      }
                 });
@@ -333,8 +366,6 @@ $(document).ajaxStop(function () {
         }
 
     });
-    console.log(geoFloods.features.length);
-    console.log(floods.length);
     calcBorFloods(floods,10,'Major');
     calcComFloods(floods,40,'Major');
     calcCauseFloods(floods,'Total');
@@ -376,18 +407,18 @@ function buildHtmlTable(selector,myList) {
 // Need to do union of keys from all records as some records may not contain
 // all records.
 function addAllColumnHeaders(myList, selector) {
-  var columnSet = [];
-  var headerTr$ = $('<tr/>');
+    var columnSet = [];
+    var headerTr$ = $('<tr/>');
 
-  for (var i = 0; i < myList.length; i++) {
-    var rowHash = myList[i];
-    for (var key in rowHash) {
-      if ($.inArray(key, columnSet) == -1) {
-        columnSet.push(key);
-        headerTr$.append($('<th/>').html(key));
-      }
+    for (var i = 0; i < myList.length; i++) {
+        var rowHash = myList[i];
+        for (var key in rowHash) {
+            if ($.inArray(key, columnSet) == -1) {
+                columnSet.push(key);
+                headerTr$.append($('<th/>').html(key));
+            }
+        }
     }
-  }
   $(selector).append(headerTr$);
 
   return columnSet;
@@ -398,12 +429,15 @@ function addAllColumnHeaders(myList, selector) {
 function makeFloodTable(id,floods,floodList){
     var columns = ['floodsID','name','year','month','fldCause','floodSeverity','impactsHMP','impactsRiverNotes','impactsStormReports','fedDR','stateDR','stormReportID'];
     var data = [];
-    console.log(geoFloods);
     $.each(geoFloods.features,function(i,flood){
         if(floodList.indexOf(flood.properties.floodsID)>-1){
             var d = {};
+            var googleRow = parseInt(flood.properties.floodsRow);
             $.each(columns,function(i,val){
                 d[val] = flood.properties[val];
+                if(val == 'floodsID'){
+                    d[val] = "<a target='dbTab' href='https://docs.google.com/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit#gid=1059416862&range=b"+googleRow+"'>"+d[val]+"</a>";
+                }
                 if(val == 'stormReportID'){
                     d[val] = "<a target='_blank' href='https://www.ncdc.noaa.gov/stormevents/eventdetails.jsp?id="+d[val]+"'>"+d[val]+"</a>";
                 }
@@ -800,7 +834,7 @@ function calcNFIP(places){
         <div style="float:center;"><label for="years2show">Years to Show:</label>
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
         <span id='numberPlotted'></span>
-        <div id="qmeas-years"  style="width: 300px;"></div>
+        <center><div id="qmeas-years"  style="width: 300px;"></div></center>
 
         <input type="checkbox" name="severity[]" value="Major" checked>Major
         <input type="checkbox" name="severity[]" value="Moderate" checked>Moderate
@@ -818,6 +852,7 @@ function calcNFIP(places){
     </div>
     <div class="maincontainer">
         <div id="mapid"></div>
+        <table id="floodMapTable" class='box-table-a' ></table>
 
         <div id="containerCauses" ></div>
         <table id="floodTable" class='box-table-a' ></table>
