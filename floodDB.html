@@ -105,6 +105,17 @@ var layersByName = {};
 var hmp = {};
 var roads = {};
 var map = {};
+var geoMilePost = {
+        "type" : "FeatureCollection",
+        'crs': {
+            'type': 'name',
+            'properties': {
+                'name': 'EPSG:3857'
+            }
+        },
+        "features": []
+    };
+
 var geoFloods = {
         "type" : "FeatureCollection",
         'crs': {
@@ -149,11 +160,6 @@ $(document).ready(function(){
 function onEachFeature(feature, layer) {
 		var popupContent = "<p>I started out as a GeoJSON " +
 				feature.geometry.type + ", but now I'm a Leaflet vector!</p>";
-
-// 		if (feature.properties && feature.properties.popupContent) {
-// 			popupContent += feature.properties.popupContent;
-// 		}
-
 		layer.bindPopup(popupContent);
 	}
 
@@ -224,15 +230,7 @@ function mapFloods(gFloods){
       }
 	});
 
-//     var geojsonMarkerOptions = {
-//         radius: 8,
-//         fillColor: "#ff7800",
-//         color: "#000",
-//         weight: 1,
-//         opacity: 1,
-//         fillOpacity: 0.8
-//     };
-//
+
 //     L.geoJSON(plotFloods, {
 //         pointToLayer: function(feature, latlng) {
 //         return L.marker(latlng, {
@@ -249,29 +247,28 @@ function mapFloods(gFloods){
 	markers.addLayer(geoJsonLayer);
 	layersByName['floodLayer'] = markers;
     map.addLayer(markers);
+    mapControl.addOverlay(markers, "Flood Events");
 }
 
 function markerClick(e) {
-  var floodList = [];
-  $.each(floods,function(i,flood){
+    var floodList = [];
+    $.each(floods,function(i,flood){
         if(flood['communitiesID'] == e.target.feature.properties.communitiesID){
             floodList.push(flood['floodsID']);
         }
     });
-
-
-  makeFloodTable('floodMapTable',floods,floodList);
- }
+    makeFloodTable('floodMapTable',floods,floodList);
+}
 
 
 function getParameterByName(name, url) {
-        if (!url) url = window.location.href;
-        name = name.replace(/[\[\]]/g, "\\$&");
-        var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+    if (!url) url = window.location.href;
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
             results = regex.exec(url);
-        if (!results) return null;
-        if (!results[2]) return '';
-        return decodeURIComponent(results[2].replace(/\+/g, " "));
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
 }
 
 
@@ -312,6 +309,50 @@ $.ajax({
     dataType: "json",
     success: function( response ) {
         roads = response;
+        $.each(roads,function(i,road){
+            var feature = {
+                "type" : "Feature",
+                "geometry": {},
+                "properties": road
+            }
+            feature.geometry.coordinates = [road.LON,road.LAT];
+            feature.geometry.type = "Point";
+            geoMilePost.features.push(feature);
+        });
+        // Point style
+        var mpStyle = {
+            opacity: 0.9,
+            radius: 1,
+            fillOpacity: 0.7
+        };
+
+
+function onEachFeature(feature, layer) {
+    layer.bindPopup(feature.properties.ROUTE_NAME+"<br>MP: " + feature.properties.MP);
+    if((feature.properties.MP % 10) == 0){
+        layer.bindTooltip(feature.properties.MP.toString(),
+            {
+                permanent: true,
+             });
+    }
+    layer.on('mouseover', function() { layer.openPopup(); });
+    layer.on('mouseout', function() { layer.closePopup(); });
+    }
+        var overlay = L.geoJson(geoMilePost, { // Make the layer from the JSON and grab the handle.
+            pointToLayer: function (feature, latlng) {
+                return L.circleMarker(latlng, mpStyle);
+//                     return L.marker(latlng, {
+//                         icon: L.icon.glyph({
+//                             prefix: '',
+//                             glyph: feature.properties.MP
+//                         })
+//                     })
+                },
+                onEachFeature: onEachFeature
+            });
+        //overlay.addTo(map); // Add the data to the map, now you can see the point layer.
+        mapControl.addOverlay(overlay, "Mileposts");
+
     }
 });
 
@@ -323,13 +364,14 @@ $(document).ajaxStop(function () {
     $( "#years2show" ).val('1890 - 2017');
     console.log('Done Loading');
     calcNFIP(communities);
+
+
     $.each(floods,function(i,flood){
         var feature = {
             "type" : "Feature",
             "geometry": {},
             "properties": flood
         }
-
         var placeID = flood['communitiesID'];
         var result = communities.filter(function( obj ) {
                 return obj.ID == placeID;
@@ -1172,22 +1214,35 @@ Highcharts.chart('containerByDecade', {
 });
 
 
+
+
+var worldTerrain  =  L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" );
+var oceanLayer    =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}" );
+var hydroTerrain  =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}" );
+var hydroMask     =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2} );
+var Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+	attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+});
+
+var hydroBase = L.layerGroup([worldTerrain, hydroTerrain, hydroMask],{maxNativeZoom:11});
+
 // create map with ESRI World Terrain Base, Streamer Ocean, Streamer HydroBaseMapForTerrain, and Streamer Mask layers
 map = new L.Map( "mapid", {
     "minZoom" : 4,
-    "maxZoom" : 11,
-    "layers"  : [
-        L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" ),
-        L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}" ),
-        L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}" ),
-        L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2} )
-    ],
+   // "maxZoom" : 11,
+    "layers"  : [Esri_WorldImagery,hydroBase],
     "center"  : new L.LatLng(65,-150),
     "zoom"    : 4,
     "attributionControl" : false
 });
 
+var baseMaps = {
 
+    "World Imagery" : Esri_WorldImagery,
+    "Hydrography" : hydroBase,
+};
+
+var mapControl = L.control.layers(baseMaps,null).addTo(map);
 
 console.log('Built map');
 
