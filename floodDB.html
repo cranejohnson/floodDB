@@ -181,6 +181,7 @@ function mapFloods(gFloods){
 
     if(typeof(layersByName['floodLayer'] ) != 'undefined'){
         console.log(map.removeLayer(layersByName['floodLayer']));
+        mapControl.removeLayer(layersByName['floodLayer']);
         console.log('removed');
     }
 
@@ -229,19 +230,6 @@ function mapFloods(gFloods){
         })
       }
 	});
-
-
-//     L.geoJSON(plotFloods, {
-//         pointToLayer: function(feature, latlng) {
-//         return L.marker(latlng, {
-//             icon: L.icon.glyph({
-//                 prefix: '',
-//                 glyph: feature.properties.floodsID
-//             })
-//         })
-//        }
-//     }).addTo(map);
-
 
 
 	markers.addLayer(geoJsonLayer);
@@ -497,6 +485,8 @@ function makeFloodTable(id,floods,floodList){
         }
     });
     buildHtmlTable('#'+id,data);
+    $('.buttonControl').html("<button type=\"button\" id=\"uncheckCause\" onclick =\"$('.dataTable').empty();\">Clear Data Tables</button>");
+
 
 
 
@@ -894,10 +884,12 @@ function calcNFIP(places){
     </div>
     <div class="maincontainer">
         <div id="mapid"></div>
-        <table id="floodMapTable" class='box-table-a' ></table>
+        <div class='dataTable buttonControl'></div>
+        <table id="floodMapTable" class='box-table-a dataTable' ></table>
 
         <div id="containerCauses" ></div>
-        <table id="floodTable" class='box-table-a' ></table>
+        <div class='dataTable buttonControl'></div>
+        <table id="floodTable" class='box-table-a dataTable' ></table>
         <div id="containerSource" ></div>
         <div id="containerByDecade" ></div>
 
@@ -906,7 +898,8 @@ function calcNFIP(places){
         <div id="containerNFIP" ></div>
         <div id="containerBorough" ></div>
         <div id="containerCommunity" ></div>
-        <table id="floodCommunityTable" class='box-table-a' ></table>
+        <div class='dataTable buttonControl'></div>
+        <table id="floodCommunityTable" class='box-table-a dataTable' ></table>
 
     </div>
 
