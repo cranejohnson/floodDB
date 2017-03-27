@@ -14,6 +14,8 @@
 <script src="https://unpkg.com/leaflet.icon.glyph@latest"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.Default.css"/>
 <script src="https://unpkg.com/leaflet.markercluster@1.0.4/dist/leaflet.markercluster.js"></script>
+ <script src="https://unpkg.com/esri-leaflet@2.0.8"></script>
+
 
 <style>
 
@@ -282,7 +284,7 @@ $.ajax({
     }
 });
 
-//Get Flood Table
+//Get hmp Table
 $.ajax({
     url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=hazardMitigationPlans",
     dataType: "json",
@@ -313,7 +315,8 @@ $.ajax({
             radius: 1,
             fillOpacity: 0.7
         };
-
+    }
+});
 
 function onEachFeature(feature, layer) {
     layer.bindPopup(feature.properties.ROUTE_NAME+"<br>MP: " + feature.properties.MP);
@@ -325,24 +328,18 @@ function onEachFeature(feature, layer) {
     }
     layer.on('mouseover', function() { layer.openPopup(); });
     layer.on('mouseout', function() { layer.closePopup(); });
-    }
+
         var overlay = L.geoJson(geoMilePost, { // Make the layer from the JSON and grab the handle.
             pointToLayer: function (feature, latlng) {
                 return L.circleMarker(latlng, mpStyle);
-//                     return L.marker(latlng, {
-//                         icon: L.icon.glyph({
-//                             prefix: '',
-//                             glyph: feature.properties.MP
-//                         })
-//                     })
                 },
                 onEachFeature: onEachFeature
             });
         //overlay.addTo(map); // Add the data to the map, now you can see the point layer.
         mapControl.addOverlay(overlay, "Mileposts");
 
-    }
-});
+};
+
 
 function isNumeric(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
@@ -366,11 +363,11 @@ $(document).ajaxStop(function () {
             });
         //jQuery.extend(feature.properties,result[0]);
         jQuery.extend(floods[i], result[0]);
-        var result = hmp.filter(function( obj ) {
-                return obj.communityID == placeID;
-            });
-        //jQuery.extend(feature.properties,result[0]);
-        jQuery.extend(floods[i], result[0]);
+//         var result = hmp.filter(function( obj ) {
+//                 return obj.communityID == placeID;
+//             });
+//         //jQuery.extend(feature.properties,result[0]);
+//         jQuery.extend(floods[i], result[0]);
         feature.geometry.type = "Point";
         if(feature.properties.communitiesID == ""){
             if(feature.properties.road != ""){
@@ -416,6 +413,8 @@ function getFloodList(floods,severity,filter,value){
     });
     return floodList;
 }
+
+
 
 
 // Builds the HTML Table out of myList.
@@ -476,8 +475,8 @@ function makeFloodTable(id,floods,floodList){
                     d[val] = "<a target='_blank' href='https://www.fema.gov/disaster/"+fedNum+"'>"+d[val]+"</a>";
                 }
                 if(val == 'impactsHMP'){
-
-                    d[val] = d[val]+"<br><a target=='_blank' href='"+flood.properties.url+"'>Link to HMP</a>";
+                    hmpObj(flood,hmp);
+                    if(d[val] != "") d[val] = d[val] + "<br>" + hmpObj.htmlList;
                 }
 
             });
@@ -490,6 +489,24 @@ function makeFloodTable(id,floods,floodList){
 
 
 
+}
+
+function hmpObj(flood,hmpList){
+
+    var localList = hmpList.filter(function( obj ) {
+                return obj.communityID == flood.properties.communitiesID;
+            });
+    var regionList = hmpList.filter(function( obj ) {
+                return obj.community == flood.properties.Bor_Cen_Ar__;
+            });
+    var html = "";
+    $.each(localList,function(i,localPlan){
+        html = html + "<a target='_blank' href='"+localPlan.url+"' title='"+localPlan.planName+"("+localPlan.planYear+")'>Local - "+localPlan.planYear+"</a><br>";
+    });
+    $.each(regionList,function(i,plan){
+        html = html + "<a target='_blank'  href='"+plan.url+"' title='"+plan.planName+"( "+plan.planYear+" )'>Regional - "+plan.planYear+"</a><br>";
+    });
+    hmpObj.htmlList = html;
 }
 
 function calcSourceFloods(floods){
@@ -1207,7 +1224,19 @@ Highcharts.chart('containerByDecade', {
 });
 
 
+var nhdLargeFlow = L.tileLayer('https://services.nationalmap.gov/arcgis/services/nhd/MapServer/WMSServer?',{
+    layers : '3',
+    version : '1.3.0'
+    });
 
+var esriTopo = L.esri.basemapLayer("Topographic");
+var usgsTopo =   L.esri.tiledMapLayer({
+    url: "https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer"
+  });
+
+var nhdLayer =   L.esri.tiledMapLayer({
+    url: "https://services.nationalmap.gov/arcgis/rest/services/nhd/MapServer"
+  });
 
 var worldTerrain  =  L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" );
 var oceanLayer    =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}" );
@@ -1223,15 +1252,17 @@ var hydroBase = L.layerGroup([worldTerrain, hydroTerrain, hydroMask],{maxNativeZ
 map = new L.Map( "mapid", {
     "minZoom" : 4,
    // "maxZoom" : 11,
-    "layers"  : [Esri_WorldImagery,hydroBase],
+    "layers"  : [Esri_WorldImagery,esriTopo,usgsTopo,nhdLayer,hydroBase],
     "center"  : new L.LatLng(65,-150),
     "zoom"    : 4,
     "attributionControl" : false
 });
 
 var baseMaps = {
-
     "World Imagery" : Esri_WorldImagery,
+    "Topography" : esriTopo,
+    "USGS Maps" : usgsTopo,
+    "NHD Layer": nhdLayer,
     "Hydrography" : hydroBase,
 };
 
