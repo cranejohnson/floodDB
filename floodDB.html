@@ -97,13 +97,44 @@ h4 {
 
 }
 
+/* Tooltip container */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+}
+
+/* Tooltip text */
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 800px;
+    background-color: black;
+    color: #fff;
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 6px;
+ 
+    /* Position the tooltip text - see examples below! */
+    position: absolute;
+    top:40px;
+    right: 105%; 
+    z-index: 1;
+}
+
+/* Show the tooltip text when you mouse over the tooltip container */
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+}
+
 </style>
 <script>
 
 var communities = {};
 
 var floods = {};
+var plotFloods = {};
 var layersByName = {};
+var DCI = {};
 var hmp = {};
 var roads = {};
 var map = {};
@@ -190,29 +221,52 @@ function mapFloods(gFloods){
     $.each($("input[name='cause[]']:checked"), function() {
         floodCause.push($(this).val());
     });
-
+    
+    var types = [];
+    $.each($("input[name='type[]']:checked"), function() {
+        types.push($(this).val());
+    });    
+    
+    console.log(types);
+    
     if(typeof(layersByName['floodLayer'] ) != 'undefined'){
         console.log(map.removeLayer(layersByName['floodLayer']));
         mapControl.removeLayer(layersByName['floodLayer']);
         console.log('removed');
     }
 
-    var plotFloods = $.extend(true, {}, gFloods);
+    var listPlotFloods = [];
+    plotFloods = {};
+    plotFloods = $.extend(true, {}, gFloods);
     var matchFeatures = [];
     $.each(gFloods.features,function(i,flood){
         if(typeof(flood) != 'undefined'){
             if($.inArray(flood.properties.fldCause,floodCause)>-1){
                 if($.inArray(flood.properties.floodSeverity,floodSeverity)>-1){
                     if((flood.properties.year>=beginYear)&&(flood.properties.year <= endYear)){
-                        matchFeatures.push(flood);
+                        if(types.length >0){
+                            $.each(types,function(i,type){
+                                console.log(flood.properties[type]);
+                                if(flood.properties[type] != ""){
+                                    if($.inArray(flood.properties.floodsID,listPlotFloods) == -1){
+                                        matchFeatures.push(flood);
+                                        listPlotFloods.push(flood.properties.floodsID);
+                                    }
+                                }    
+                            });
+                        }
+                        else{
+                            matchFeatures.push(flood);
+                        }    
                     }
                 }
             }
         }
     });
 
+    console.log(matchFeatures);
     plotFloods.features = matchFeatures;
-    console.log(plotFloods.features.length);
+    
     $('#numberPlotted').text('Events Mapped: '+plotFloods.features.length);
 
 
@@ -252,9 +306,10 @@ function mapFloods(gFloods){
 
 function markerClick(e) {
     var floodList = [];
-    $.each(floods,function(i,flood){
-        if(flood['communitiesID'] == e.target.feature.properties.communitiesID){
-            floodList.push(flood['floodsID']);
+    
+    $.each(plotFloods.features,function(i,flood){
+        if(flood.properties.communitiesID == e.target.feature.properties.communitiesID){
+            floodList.push(flood.properties.floodsID);
         }
     });
     makeFloodTable('floodMapTable',floods,floodList);
@@ -275,6 +330,20 @@ function getParameterByName(name, url) {
 var checkCode = getParameterByName('id');
 var host = location.host;
 
+//Get DCI Table
+$.ajax({
+    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=DCI",
+    dataType: "json",
+    success: function( response ) {
+        $.each(response,function(i,flood){
+            DCI[flood.stateDR] = {
+                title:flood.title,
+                narrative:flood.narrative
+            }
+        });
+        
+    }
+});
 
 //Get Community Table
 $.ajax({
@@ -371,13 +440,7 @@ $(document).ajaxStop(function () {
         var result = communities.filter(function( obj ) {
                 return obj.ID == placeID;
             });
-        //jQuery.extend(feature.properties,result[0]);
         jQuery.extend(floods[i], result[0]);
-//         var result = hmp.filter(function( obj ) {
-//                 return obj.communityID == placeID;
-//             });
-//         //jQuery.extend(feature.properties,result[0]);
-//         jQuery.extend(floods[i], result[0]);
         feature.geometry.type = "Point";
         if(feature.properties.communitiesID == ""){
             if(feature.properties.road != ""){
@@ -423,7 +486,6 @@ function getFloodList(floods,severity,filter,value){
     });
     return floodList;
 }
-
 
 
 
@@ -487,6 +549,13 @@ function makeFloodTable(id,floods,floodList){
                 if(val == 'impactsHMP'){
                     hmpObj(flood,hmp);
                     if(d[val] != "") d[val] = d[val] + "<br>" + hmpObj.htmlList;
+                }
+                if(val == 'stateDR'){
+                    if(d[val] != ""){
+                       var stateDR = d[val];
+                       d[val] = '<div class="tooltip">'+stateDR+'<span class="tooltiptext">'+DCI[stateDR].title+'<br>'+DCI[stateDR].narrative+'</span></div>';
+                    }
+                   
                 }
 
             });
@@ -896,11 +965,13 @@ function calcNFIP(places){
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
         <span id='numberPlotted'></span>
         <center><div id="qmeas-years"  style="width: 300px;"></div></center>
-
+        Show Only:<input type="checkbox" name="type[]" value="fedDR">FEMA DR
+        <input type="checkbox" name="type[]" value="stateDR">State DR<br>
         <input type="checkbox" name="severity[]" value="Major" checked>Major
         <input type="checkbox" name="severity[]" value="Moderate" checked>Moderate
         <input type="checkbox" name="severity[]" value="Minor" checked>Minor
         <input type="checkbox" name="severity[]" value="Undefined" checked>Undefined<br>
+       
         <input type="checkbox" class = 'cause' name="cause[]" value="rainfall" checked>Rainfall
         <input type="checkbox" class = 'cause' name="cause[]" value="ice jam" checked>Ice Jam
         <input type="checkbox" class = 'cause' name="cause[]" value="coastal" checked>Coastal
