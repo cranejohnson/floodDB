@@ -130,6 +130,8 @@ var geoFloods = {
     };
 
 $( function() {
+
+
     $( "#qmeas-years" ).dragslider({
         range: true,
         min: 1889,
@@ -146,7 +148,15 @@ $( function() {
             mapFloods(geoFloods);
         }
     });
-} );
+
+    $("#singleYear").blur(function() {
+        $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
+        $( "#qmeas-years" ).dragslider('values',0,$("#singleYear").val());
+        $( "#qmeas-years" ).dragslider('values',1,$("#singleYear").val());
+        mapFloods(geoFloods);
+    });
+});
+
 
 
 $(document).ready(function(){
@@ -880,7 +890,9 @@ function calcNFIP(places){
 
 <div class = 'center'>
         <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
-        <div style="float:center;"><label for="years2show">Years to Show:</label>
+
+        <div style="float:center;">Single Year:<input type="text" id="singleYear" maxlength="4" size="4">
+        <label for="years2show">Years to Show:</label>
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
         <span id='numberPlotted'></span>
         <center><div id="qmeas-years"  style="width: 300px;"></div></center>
@@ -921,6 +933,8 @@ function calcNFIP(places){
     </div>
 
 <script>
+
+
 Highcharts.chart('containerNFIP', {
     chart: {
         plotBackgroundColor: null,
