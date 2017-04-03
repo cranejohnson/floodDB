@@ -13,9 +13,10 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.css"/>
 <script src="https://unpkg.com/leaflet.icon.glyph@latest"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.Default.css"/>
+<link rel="stylesheet" href="http://azavea.github.io/Leaflet.zoomdisplay/css/leaflet.zoomdisplay.css"/>
 <script src="https://unpkg.com/leaflet.markercluster@1.0.4/dist/leaflet.markercluster.js"></script>
  <script src="https://unpkg.com/esri-leaflet@2.0.8"></script>
-
+<script src="http://azavea.github.io/Leaflet.zoomdisplay/js/leaflet.zoomdisplay.js"></script>
 
 <style>
 
@@ -113,11 +114,11 @@ h4 {
     text-align: center;
     padding: 5px 0;
     border-radius: 6px;
- 
+
     /* Position the tooltip text - see examples below! */
     position: absolute;
     top:40px;
-    right: 105%; 
+    right: 105%;
     z-index: 1;
 }
 
@@ -200,6 +201,48 @@ $(document).ready(function(){
 
 //////////////////////////Mapping Code//////////////////////////
 
+function getHUC(lat,lon){
+
+    var point = map.project([lat,lon]).divideBy(256).floor();
+
+    console.log(point);
+    var ht = 315*100;     //imageDisplay x 100 = each pixel 100 meters
+    var wd = 1370*100;    //imageDisplay x 100 = each pixel 100 meters
+
+
+    var params = {
+        tolerance : 0,
+        returnGeometry : false,
+        geometryType : 'esriGeometryPoint',
+        mapExtent : (point.lon-wd)+','+(point.lat-ht)+','+(point.lon+wd)+','+(point.lat+ht),
+        imageDisplay : '1370,315,1',
+        f : 'json',
+        sr : 102100,
+        layers: 'all:1,2,3,4,5,6,7,8',
+        geometry: '{ "x" : '+point.lon+', "y" : '+point.lat+' }'
+    };
+
+
+     $.ajax({
+            type: "GET",
+            url: "https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/identify",
+            data: params,
+            async: false,
+            contentType: "application/json; charset=utf-8",
+            headers : {'Content-Type' : 'application/x-www-form-urlencoded; charset=UTF-8'},
+            dataType: "json",
+            success: function (data) {
+                console.log(data);
+                },
+                error: function (request, status, errorThrown) {
+                    console.log(status);
+                }
+        });
+
+}
+
+
+
 function onEachFeature(feature, layer) {
 		var popupContent = "<p>I started out as a GeoJSON " +
 				feature.geometry.type + ", but now I'm a Leaflet vector!</p>";
@@ -221,14 +264,14 @@ function mapFloods(gFloods){
     $.each($("input[name='cause[]']:checked"), function() {
         floodCause.push($(this).val());
     });
-    
+
     var types = [];
     $.each($("input[name='type[]']:checked"), function() {
         types.push($(this).val());
-    });    
-    
+    });
+
     console.log(types);
-    
+
     if(typeof(layersByName['floodLayer'] ) != 'undefined'){
         console.log(map.removeLayer(layersByName['floodLayer']));
         mapControl.removeLayer(layersByName['floodLayer']);
@@ -252,12 +295,12 @@ function mapFloods(gFloods){
                                         matchFeatures.push(flood);
                                         listPlotFloods.push(flood.properties.floodsID);
                                     }
-                                }    
+                                }
                             });
                         }
                         else{
                             matchFeatures.push(flood);
-                        }    
+                        }
                     }
                 }
             }
@@ -266,7 +309,7 @@ function mapFloods(gFloods){
 
     console.log(matchFeatures);
     plotFloods.features = matchFeatures;
-    
+
     $('#numberPlotted').text('Events Mapped: '+plotFloods.features.length);
 
 
@@ -306,13 +349,14 @@ function mapFloods(gFloods){
 
 function markerClick(e) {
     var floodList = [];
-    
+
     $.each(plotFloods.features,function(i,flood){
         if(flood.properties.communitiesID == e.target.feature.properties.communitiesID){
             floodList.push(flood.properties.floodsID);
         }
     });
     makeFloodTable('floodMapTable',floods,floodList);
+    getHUC(e.latlng.lat,e.latlng.lng);
 }
 
 
@@ -341,7 +385,7 @@ $.ajax({
                 narrative:flood.narrative
             }
         });
-        
+
     }
 });
 
@@ -536,6 +580,11 @@ function makeFloodTable(id,floods,floodList){
             var googleRow = parseInt(flood.properties.floodsRow);
             $.each(columns,function(i,val){
                 d[val] = flood.properties[val];
+                if(val == 'name'){
+                    if(d[val] == ""){
+                        d[val] = flood.properties.road+" MP "+flood.properties.milePost;
+                    }
+                }
                 if(val == 'floodsID'){
                     d[val] = "<a target='dbTab' href='https://docs.google.com/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit#gid=1059416862&range=b"+googleRow+"'>"+d[val]+"</a>";
                 }
@@ -555,7 +604,7 @@ function makeFloodTable(id,floods,floodList){
                        var stateDR = d[val];
                        d[val] = '<div class="tooltip">'+stateDR+'<span class="tooltiptext">'+DCI[stateDR].title+'<br>'+DCI[stateDR].narrative+'</span></div>';
                     }
-                   
+
                 }
 
             });
@@ -971,7 +1020,7 @@ function calcNFIP(places){
         <input type="checkbox" name="severity[]" value="Moderate" checked>Moderate
         <input type="checkbox" name="severity[]" value="Minor" checked>Minor
         <input type="checkbox" name="severity[]" value="Undefined" checked>Undefined<br>
-       
+
         <input type="checkbox" class = 'cause' name="cause[]" value="rainfall" checked>Rainfall
         <input type="checkbox" class = 'cause' name="cause[]" value="ice jam" checked>Ice Jam
         <input type="checkbox" class = 'cause' name="cause[]" value="coastal" checked>Coastal
@@ -1324,14 +1373,14 @@ var nhdLayer =   L.esri.tiledMapLayer({
   });
 
 var worldTerrain  =  L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" );
-var oceanLayer    =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}" );
-var hydroTerrain  =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}" );
-var hydroMask     =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2} );
+var oceanLayer    =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
+var hydroTerrain  =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
+var hydroMask     =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2,"maxNativeZoom":11} );
 var Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
 	attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 });
 
-var hydroBase = L.layerGroup([worldTerrain, hydroTerrain, hydroMask],{maxNativeZoom:11});
+var hydroBase = L.layerGroup([worldTerrain, hydroTerrain, hydroMask]);
 
 // create map with ESRI World Terrain Base, Streamer Ocean, Streamer HydroBaseMapForTerrain, and Streamer Mask layers
 map = new L.Map( "mapid", {
@@ -1347,12 +1396,11 @@ var baseMaps = {
     "World Imagery" : Esri_WorldImagery,
     "Topography" : esriTopo,
     "USGS Maps" : usgsTopo,
-    "NHD Layer": nhdLayer,
+    //"NHD Layer": nhdLayer,
     "Hydrography" : hydroBase,
 };
 
 var mapControl = L.control.layers(baseMaps,null).addTo(map);
-
 console.log('Built map');
 
 </script>
