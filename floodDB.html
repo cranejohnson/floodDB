@@ -16,9 +16,10 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.Default.css"/>
 <link rel="stylesheet" href="http://azavea.github.io/Leaflet.zoomdisplay/css/leaflet.zoomdisplay.css"/>
 <script src="https://unpkg.com/leaflet.markercluster@1.0.4/dist/leaflet.markercluster.js"></script>
- <script src="https://unpkg.com/esri-leaflet@2.0.8"></script>
+<script src="https://unpkg.com/esri-leaflet@2.0.8"></script>
 <script src="http://azavea.github.io/Leaflet.zoomdisplay/js/leaflet.zoomdisplay.js"></script>
-    <script src="https://www.openlayers.org/api/OpenLayers.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.3/proj4.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4leaflet/1.0.1/proj4leaflet.min.js"></script>
 <script src="http://mrmufflon.github.io/Leaflet.Coordinates/dist/Leaflet.Coordinates-0.1.3.min.js"></script>
 
 
@@ -96,6 +97,11 @@ h4 {
     text-align: center;
     width: 400;
     margin: auto;
+}
+
+#siteInfo{
+    text-align: left;
+    background-color: lightgray;
 }
 
 .ui-slider .ui-slider-handle{
@@ -208,42 +214,42 @@ $(document).ready(function(){
 
 function getHUC(lat,lon){
 
-    //Couldn't figure out how to do this in leaflet so added Openlayers just for the point convert
-    var esriProj = new OpenLayers.Projection("EPSG:3857");
-    var wgs84 = new OpenLayers.Projection("EPSG:4326");
-    var point = new OpenLayers.LonLat(lon, lat);
-    console.log(point);
-    point2 =  point.transform(wgs84, esriProj);
+    var dest = new proj4.Proj('EPSG:3857');
+    var point = proj4(dest,[lon,lat]);
 
-    //var lonlat = new L.Point(lon,lat); // Lon/Lat
-    console.log(point2);
+
     var ht = 315*100;     //imageDisplay x 100 = each pixel 100 meters
     var wd = 1370*100;    //imageDisplay x 100 = each pixel 100 meters
-
 
     var params = {
         tolerance : 0,
         returnGeometry : false,
         geometryType : 'esriGeometryPoint',
-        mapExtent : (point.lon-wd)+','+(point.lat-ht)+','+(point.lon+wd)+','+(point.lat+ht),
+        //async:false,
+        mapExtent : (point[0]-wd)+','+(point[1]-ht)+','+(point[0]+wd)+','+(point[1]+ht),
         imageDisplay : '1370,315,1',
         f : 'json',
         sr : 102100,
-        layers: 'all:1,2,3,4,5,6,7,8',
-        geometry: '{ "x" : '+point.lon+', "y" : '+point.lat+' }'
+        layers: 'all:5,6',
+        geometry: '{ "x" : '+point[0]+', "y" : '+point[1]+' }'
     };
 
-
+    $('#siteInfo').append('Loading HUC codes.......');
      $.ajax({
             type: "GET",
             url: "https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/identify",
             data: params,
-            async: false,
             contentType: "application/json; charset=utf-8",
             headers : {'Content-Type' : 'application/x-www-form-urlencoded; charset=UTF-8'},
             dataType: "json",
             success: function (data) {
-                console.log(data);
+                $('#siteInfo').empty();
+
+                $('#siteInfo').append('Lat: '+lat+'<br>Lon: '+lon+'<br>');
+                $.each(data.results,function(){
+                    var huc = this.layerId*2;
+                    $('#siteInfo').append(this.layerName+': '+this.value+' '+this.attributes['HUC'+huc]+'<br>');
+                });
                 },
                 error: function (request, status, errorThrown) {
                     console.log(status);
@@ -383,7 +389,7 @@ var checkCode = getParameterByName('id');
 var host = location.host;
 
 //Get DCI Table
-$.ajax({
+var async1 = $.ajax({
     url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=DCI",
     dataType: "json",
     success: function( response ) {
@@ -398,7 +404,7 @@ $.ajax({
 });
 
 //Get Community Table
-$.ajax({
+var async2 = $.ajax({
     url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=communities",
     dataType: "json",
     success: function( response ) {
@@ -407,7 +413,7 @@ $.ajax({
 });
 
 //Get Flood Table
-$.ajax({
+var async3 = $.ajax({
     url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=floods",
     dataType: "json",
     success: function( response ) {
@@ -416,7 +422,7 @@ $.ajax({
 });
 
 //Get hmp Table
-$.ajax({
+var async4 = $.ajax({
     url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=hazardMitigationPlans",
     dataType: "json",
     success: function( response ) {
@@ -425,7 +431,7 @@ $.ajax({
 });
 
 //Get road Table
-$.ajax({
+var async5 = $.ajax({
     url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=AKroads",
     dataType: "json",
     success: function( response ) {
@@ -476,7 +482,9 @@ function isNumeric(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
 }
 
-$(document).ajaxStop(function () {
+//$(document).ajaxStop(function () {
+$.when(async1, async2,async3,async4,async5).done(function() {
+
     $( "#years2show" ).val('1890 - 2017');
     console.log('Done Loading');
     calcNFIP(communities);
@@ -1043,6 +1051,7 @@ function calcNFIP(places){
         <div id="mapid"></div>
         <div class='dataTable buttonControl'></div>
         <table id="floodMapTable" class='box-table-a dataTable' ></table>
+        <div id="siteInfo" class=' dataTable' ></div>
 
         <div id="containerCauses" ></div>
         <div class='dataTable buttonControl'></div>
@@ -1376,9 +1385,6 @@ var usgsTopo =   L.esri.tiledMapLayer({
     url: "https://services.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer"
   });
 
-var nhdLayer =   L.esri.tiledMapLayer({
-    url: "https://services.nationalmap.gov/arcgis/rest/services/nhd/MapServer"
-  });
 
 var worldTerrain  =  L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" );
 var oceanLayer    =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
@@ -1394,7 +1400,7 @@ var hydroBase = L.layerGroup([worldTerrain, hydroTerrain, hydroMask]);
 map = new L.Map( "mapid", {
     "minZoom" : 4,
    // "maxZoom" : 11,
-    "layers"  : [Esri_WorldImagery,esriTopo,usgsTopo,nhdLayer,hydroBase],
+    "layers"  : [Esri_WorldImagery,esriTopo,usgsTopo,hydroBase],
     "center"  : new L.LatLng(65,-150),
     "zoom"    : 4,
     "attributionControl" : false
@@ -1404,12 +1410,13 @@ var baseMaps = {
     "World Imagery" : Esri_WorldImagery,
     "Topography" : esriTopo,
     "USGS Maps" : usgsTopo,
-    //"NHD Layer": nhdLayer,
     "Hydrography" : hydroBase,
 };
 
 var mapControl = L.control.layers(baseMaps,null).addTo(map);
-L.control.coordinates().addTo(map);
+L.control.coordinates(
+    {labelTemplateLat:"Lat: {y}",
+	labelTemplateLng:"Lon: {x}"}).addTo(map);
 console.log('Built map');
 
 </script>
