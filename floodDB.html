@@ -193,10 +193,12 @@ $( function() {
     });
 
     $("#singleYear").blur(function() {
-        $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
-        $( "#qmeas-years" ).dragslider('values',0,$("#singleYear").val());
-        $( "#qmeas-years" ).dragslider('values',1,$("#singleYear").val());
-        mapFloods(geoFloods);
+        if($( "#singleYear" ).val().length ==4){
+            $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
+            $( "#qmeas-years" ).dragslider('values',0,$("#singleYear").val());
+            $( "#qmeas-years" ).dragslider('values',1,$("#singleYear").val());
+            mapFloods(geoFloods);
+        }    
     });
 });
 
@@ -206,9 +208,24 @@ $(document).ready(function(){
     $("input[type='checkbox']").on('change', function(){
          mapFloods(geoFloods);
     });
-
+    
+    $(document).keydown(function(e) {
+        if($( "#singleYear" ).val().length ==4){
+            if(e.keyCode == 39){
+                var newYear = parseInt($( "#singleYear" ).val())+1;
+                $( "#singleYear" ).val(newYear);
+            }
+            if(e.keyCode == 37){
+                var newYear = parseInt($( "#singleYear" ).val())-1;
+                $( "#singleYear" ).val(newYear);
+            }
+            $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
+            $( "#qmeas-years" ).dragslider('values',0,$("#singleYear").val());
+            $( "#qmeas-years" ).dragslider('values',1,$("#singleYear").val());
+            mapFloods(geoFloods);
+        }
+    });
 });
-
 
 //////////////////////////Mapping Code//////////////////////////
 
