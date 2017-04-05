@@ -21,6 +21,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.3/proj4.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4leaflet/1.0.1/proj4leaflet.min.js"></script>
 <script src="http://mrmufflon.github.io/Leaflet.Coordinates/dist/Leaflet.Coordinates-0.1.3.min.js"></script>
+<script src="esri2geo.js"></script>
 
 
 
@@ -198,7 +199,7 @@ $( function() {
             $( "#qmeas-years" ).dragslider('values',0,$("#singleYear").val());
             $( "#qmeas-years" ).dragslider('values',1,$("#singleYear").val());
             mapFloods(geoFloods);
-        }    
+        }
     });
 });
 
@@ -208,8 +209,9 @@ $(document).ready(function(){
     $("input[type='checkbox']").on('change', function(){
          mapFloods(geoFloods);
     });
-    
+
     $(document).keydown(function(e) {
+        console.log('key');
         if($( "#singleYear" ).val().length ==4){
             if(e.keyCode == 39){
                 var newYear = parseInt($( "#singleYear" ).val())+1;
@@ -228,6 +230,47 @@ $(document).ready(function(){
 });
 
 //////////////////////////Mapping Code//////////////////////////
+
+function streamer(lat,lon){
+
+    var dest = new proj4.Proj('EPSG:3857');
+    var point = proj4(dest,[lon,lat]);
+
+
+    var ht = 315*100;     //imageDisplay x 100 = each pixel 100 meters
+    var wd = 1370*100;    //imageDisplay x 100 = each pixel 100 meters
+
+    var params = {
+        tolerance : 3,
+        returnGeometry : true,
+        geometryType : 'esriGeometryPoint',
+        mapExtent : (point[0]-wd)+','+(point[1]-ht)+','+(point[0]+wd)+','+(point[1]+ht),
+        imageDisplay : '1370,315,1',
+        f : 'json',
+        sr : 102100,
+        layers: 'all:1',
+        geometry: '{ "x" : '+point[0]+', "y" : '+point[1]+' }'
+    };
+    console.log('Getting streamer');
+     $.ajax({
+            type: "GET",
+            url: "https://txpub.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/identify",
+            data: params,
+            contentType: "application/json; charset=utf-8",
+            headers : {'Content-Type' : 'application/x-www-form-urlencoded; charset=UTF-8'},
+            dataType: "json",
+            success: function (data) {
+                console.log(data);
+                var geoJSON = toGeoJSON(data);
+                console.log(geoJSON);
+                },
+                error: function (request, status, errorThrown) {
+                    console.log(status);
+                }
+        });
+
+}
+
 
 function getHUC(lat,lon){
 
@@ -388,6 +431,7 @@ function markerClick(e) {
     });
     makeFloodTable('floodMapTable',floods,floodList);
     getHUC(e.latlng.lat,e.latlng.lng);
+    streamer(e.latlng.lat,e.latlng.lng);
 }
 
 
