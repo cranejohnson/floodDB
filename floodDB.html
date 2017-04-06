@@ -21,7 +21,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.3/proj4.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4leaflet/1.0.1/proj4leaflet.min.js"></script>
 <script src="http://mrmufflon.github.io/Leaflet.Coordinates/dist/Leaflet.Coordinates-0.1.3.min.js"></script>
-<script src="esri2geo.js"></script>
+<script src="esri2geojson.js"></script>
+
+
 
 
 
@@ -142,6 +144,9 @@ h4 {
 </style>
 <script>
 
+//import {geojsonToArcGIS, arcgisToGeoJSON} from 'esri2geojson.js';
+
+
 var communities = {};
 
 var floods = {};
@@ -249,11 +254,27 @@ function streamer(lat,lon){
         f : 'json',
         sr : 102100,
         layers: 'all:1',
+        //layers: 'all:15',
         geometry: '{ "x" : '+point[0]+', "y" : '+point[1]+' }'
     };
     console.log('Getting streamer');
+    var flowLines = {"type":"FeatureCollection",
+                        "features":[],
+                        "crs":{
+                            "type": "name",
+                            "properties": {
+                                "name": "EPSG:3857"
+                            }
+                        }
+                    }
+    var myStyle = {
+        "color": "#00008B",
+        "weight": 5,
+        "opacity": 0.65
+    };
      $.ajax({
             type: "GET",
+            //url: "https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/identify",
             url: "https://txpub.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/identify",
             data: params,
             contentType: "application/json; charset=utf-8",
@@ -261,12 +282,32 @@ function streamer(lat,lon){
             dataType: "json",
             success: function (data) {
                 console.log(data);
-                var geoJSON = toGeoJSON(data);
-                console.log(geoJSON);
-                },
-                error: function (request, status, errorThrown) {
-                    console.log(status);
+                console.log('converting');
+                $.each(data.results,function(){
+                    var geoJSON = arcgisToGeoJSON(this);
+                    flowLines.features.push(geoJSON);
+                });
+
+            var markers = L.Proj.geoJson(flowLines, {
+                style: myStyle,
+                onEachFeature: function (feature, layer) {
+                    var popupcontent = "";
+                    $.each(feature.properties,function(k,v){
+                        popupcontent = popupcontent + "<span style='font-weight:bold'>"+k+": </span>"+v+"<br>";
+                    });
+                    layer.bindPopup(popupcontent);
+
                 }
+            });
+            map.addLayer(markers);
+
+            var layers = markers.getLayers();
+            layers[0].openPopup()
+            //mapControl.addOverlay(markers, "Local Flow Lines");
+            },
+            error: function (request, status, errorThrown) {
+                console.log(status);
+            }
         });
 
 }
@@ -431,7 +472,6 @@ function markerClick(e) {
     });
     makeFloodTable('floodMapTable',floods,floodList);
     getHUC(e.latlng.lat,e.latlng.lng);
-    streamer(e.latlng.lat,e.latlng.lng);
 }
 
 
@@ -1479,6 +1519,12 @@ L.control.coordinates(
     {labelTemplateLat:"Lat: {y}",
 	labelTemplateLng:"Lon: {x}"}).addTo(map);
 console.log('Built map');
+
+$('.leaflet-container').css('cursor','crosshair');
+
+map.on('click', function(e) {
+        streamer(e.latlng.lat,e.latlng.lng);
+    });
 
 </script>
 
