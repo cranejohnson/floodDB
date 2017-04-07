@@ -6,6 +6,7 @@
 <script src="https://code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
 <script src="https://www.weather.gov/source/aprfc/js/jquery.ui.slider.custom.js"></script>
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+ <script src="https://www.weather.gov/source/aprfc/js/moment.js"></script>
 
 <!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.1/dist/leaflet.css" />
@@ -21,7 +22,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.4.3/proj4.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4leaflet/1.0.1/proj4leaflet.min.js"></script>
 <script src="http://mrmufflon.github.io/Leaflet.Coordinates/dist/Leaflet.Coordinates-0.1.3.min.js"></script>
-<script src="esri2geojson.js"></script>
+<script src="https://www.weather.gov/source/aprfc/js/esri2geojson.js"></script>
 
 
 
@@ -97,6 +98,12 @@ h4 {
 },
 
 #qmeas-years{
+    text-align: center;
+    width: 400;
+    margin: auto;
+}
+
+#qmeas-months{
     text-align: center;
     width: 400;
     margin: auto;
@@ -194,6 +201,22 @@ $( function() {
         },
         stop: function( event, ui ) {
             $( "#years2show" ).val(ui.values[0]+ " - " +ui.values[1]);
+            mapFloods(geoFloods);
+        }
+    });
+    
+    $( "#qmeas-months" ).dragslider({
+        range: true,
+        min: 0,
+        max: 11,
+        step: 1,
+        values: [0,11],
+        slide: function( event, ui ) {
+            $( "#months2show" ).val( moment(new Date(2012, ui.values[0], 01)).format("MMM")+ " - " + moment(new Date(2012, ui.values[1], 01)).format("MMM") );
+            mapFloods(geoFloods);
+        },
+        stop: function( event, ui ) {
+            $( "#months2show" ).val( moment(new Date(2012, ui.values[0], 01)).format("MMM")+ " - " + moment(new Date(2012, ui.values[1], 01)).format("MMM") );
             mapFloods(geoFloods);
         }
     });
@@ -372,7 +395,18 @@ function mapFloods(gFloods){
 
     var beginYear = $("#qmeas-years").dragslider("values",0);
     var endYear = $("#qmeas-years").dragslider("values",1);
+    var beginMonth = $("#qmeas-months").dragslider("values",0);
+    var endMonth = $("#qmeas-months").dragslider("values",1);
+    
+    var skipMonthCheck = !$('#undefMonth').is(":checked");
+    console.log(skipMonthCheck);
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    console.log(months);
 
+    var checkMonths = months.slice(parseInt(beginMonth),parseInt(endMonth));
+    
+    console.log(beginMonth,endMonth,checkMonths);
+    
     var floodSeverity = [];
     $.each($("input[name='severity[]']:checked"), function() {
         floodSeverity.push($(this).val());
@@ -403,19 +437,21 @@ function mapFloods(gFloods){
             if($.inArray(flood.properties.fldCause,floodCause)>-1){
                 if($.inArray(flood.properties.floodSeverity,floodSeverity)>-1){
                     if((flood.properties.year>=beginYear)&&(flood.properties.year <= endYear)){
-                        if(types.length >0){
-                            $.each(types,function(i,type){
-                                //console.log(flood.properties[type]);
-                                if(flood.properties[type] != ""){
-                                    if($.inArray(flood.properties.floodsID,listPlotFloods) == -1){
-                                        matchFeatures.push(flood);
-                                        listPlotFloods.push(flood.properties.floodsID);
+                        if(((jQuery.inArray(flood.properties.month,checkMonths) < 0) || skipMonthCheck) ||(jQuery.inArray(flood.properties.month,checkMonths) >= 0)){
+                            if(types.length >0){
+                                $.each(types,function(i,type){
+                                    //console.log(flood.properties[type]);
+                                    if(flood.properties[type] != ""){
+                                        if($.inArray(flood.properties.floodsID,listPlotFloods) == -1){
+                                            matchFeatures.push(flood);
+                                            listPlotFloods.push(flood.properties.floodsID);
+                                        }
                                     }
-                                }
-                            });
-                        }
-                        else{
-                            matchFeatures.push(flood);
+                                });
+                            }    
+                            else{
+                                matchFeatures.push(flood);
+                            }
                         }
                     }
                 }
@@ -1131,6 +1167,9 @@ function calcNFIP(places){
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
         <span id='numberPlotted'></span>
         <center><div id="qmeas-years"  style="width: 300px;"></div></center>
+        <label for="months2show">Months to Show:</label>
+         <input type="text" id="months2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
+        <center><div id="qmeas-months"  style="width: 300px;"></div><input type="checkbox" id="undefMonth" checked>Show Undefined Months</center>
         Show Only:<input type="checkbox" name="type[]" value="fedDR">FEMA DR
         <input type="checkbox" name="type[]" value="stateDR">State DR<br>
         <input type="checkbox" name="severity[]" value="Major" checked>Major
