@@ -204,12 +204,13 @@ $( function() {
             mapFloods(geoFloods);
         }
     });
-    
+
     $( "#qmeas-months" ).dragslider({
         range: true,
         min: 0,
         max: 11,
         step: 1,
+        rangeDrag: true, // Enable range dragging.
         values: [0,11],
         slide: function( event, ui ) {
             $( "#months2show" ).val( moment(new Date(2012, ui.values[0], 01)).format("MMM")+ " - " + moment(new Date(2012, ui.values[1], 01)).format("MMM") );
@@ -397,16 +398,17 @@ function mapFloods(gFloods){
     var endYear = $("#qmeas-years").dragslider("values",1);
     var beginMonth = $("#qmeas-months").dragslider("values",0);
     var endMonth = $("#qmeas-months").dragslider("values",1);
-    
-    var skipMonthCheck = !$('#undefMonth').is(":checked");
-    console.log(skipMonthCheck);
-    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    console.log(months);
 
-    var checkMonths = months.slice(parseInt(beginMonth),parseInt(endMonth));
-    
-    console.log(beginMonth,endMonth,checkMonths);
-    
+    var months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+    var checkMonths = months.slice(parseInt(beginMonth),parseInt(endMonth)+1);
+    if($('#undefMonth').is(":checked")){
+        checkMonths.push('');
+     }
+
+
+    console.log(checkMonths);
+
     var floodSeverity = [];
     $.each($("input[name='severity[]']:checked"), function() {
         floodSeverity.push($(this).val());
@@ -437,7 +439,7 @@ function mapFloods(gFloods){
             if($.inArray(flood.properties.fldCause,floodCause)>-1){
                 if($.inArray(flood.properties.floodSeverity,floodSeverity)>-1){
                     if((flood.properties.year>=beginYear)&&(flood.properties.year <= endYear)){
-                        if(((jQuery.inArray(flood.properties.month,checkMonths) < 0) || skipMonthCheck) ||(jQuery.inArray(flood.properties.month,checkMonths) >= 0)){
+                        if(jQuery.inArray(flood.properties.month.trim().toLowerCase(),checkMonths) > -1){
                             if(types.length >0){
                                 $.each(types,function(i,type){
                                     //console.log(flood.properties[type]);
@@ -448,7 +450,7 @@ function mapFloods(gFloods){
                                         }
                                     }
                                 });
-                            }    
+                            }
                             else{
                                 matchFeatures.push(flood);
                             }
@@ -623,6 +625,7 @@ function isNumeric(n) {
 $.when(async1, async2,async3,async4,async5).done(function() {
 
     $( "#years2show" ).val('1890 - 2017');
+    $( "#months2show" ).val('Jan - Dec');
     console.log('Done Loading');
     calcNFIP(communities);
 
@@ -1169,7 +1172,7 @@ function calcNFIP(places){
         <center><div id="qmeas-years"  style="width: 300px;"></div></center>
         <label for="months2show">Months to Show:</label>
          <input type="text" id="months2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
-        <center><div id="qmeas-months"  style="width: 300px;"></div><input type="checkbox" id="undefMonth" checked>Show Undefined Months</center>
+        <center><div id="qmeas-months"  style="width: 300px;"></div><input type="checkbox" id="undefMonth" checked>Include Undefined Months</center>
         Show Only:<input type="checkbox" name="type[]" value="fedDR">FEMA DR
         <input type="checkbox" name="type[]" value="stateDR">State DR<br>
         <input type="checkbox" name="severity[]" value="Major" checked>Major
