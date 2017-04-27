@@ -27,7 +27,6 @@
 
 
 
-
 <style>
 
 .box-table-a {
@@ -222,6 +221,13 @@ $( function() {
         }
     });
 
+
+    $("#riverSearch").blur(function(){
+        findStreamByName($("#riverSearch").val(),map);
+    });
+
+
+
     $("#singleYear").blur(function() {
         if($( "#singleYear" ).val().length ==4){
             $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
@@ -240,7 +246,6 @@ $(document).ready(function(){
     });
 
     $(document).keydown(function(e) {
-        console.log('key');
         if($( "#singleYear" ).val().length ==4){
             if(e.keyCode == 39){
                 var newYear = parseInt($( "#singleYear" ).val())+1;
@@ -259,6 +264,83 @@ $(document).ready(function(){
 });
 
 //////////////////////////Mapping Code//////////////////////////
+
+function findStreamByName(name,map){
+
+    var bounds = map.getBounds();
+
+    var nhdUrl = 'https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/9/query';
+    var streamURL = 'https://txpub.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/1/query';
+    var params = {
+        //where: 'upper(GNIS_NAME) like upper(\'%'+name+'%\')',
+        where: 'upper(Name) like upper(\'%'+name+'%\')',
+        geometry:'esriGeometryEnvelope&geometry='+bounds.getEast()+','+bounds.getSouth()+','+bounds.getWest()+','+bounds.getNorth(),
+        geometryType:'esriGeometryEnvelope',
+        inSR:4326,
+        spatialRel:'esriSpatialRelIntersects',
+        returnGeometry:true,
+        returnTrueCurves:false,
+        outSR:3857,
+        returnIdsOnly:false,
+        returnCountOnly:false,
+        returnZ:false,
+        returnM:false,
+        returnDistinctValues:false,
+        //f:'geojson'
+        f:'json'
+        }
+
+    var flowLines = {"type":"FeatureCollection",
+                        "features":[],
+                        "crs":{
+                            "type": "name",
+                            "properties": {
+                                "name": "EPSG:3857"
+                            }
+                        }
+                    }
+
+    var myStyle = {
+        "color": "green",
+        "weight": 5,
+    };
+     $.ajax({
+            type: "GET",
+            url: streamURL,
+            data: params,
+            dataType: "json",
+            success: function (data) {
+
+                $.each(data.features,function(){
+                    var geoJSON = arcgisToGeoJSON(this);
+                    flowLines.features.push(geoJSON);
+                });
+                var markers = L.Proj.geoJson(flowLines, {
+                    style: myStyle,
+                    onEachFeature: function (feature, layer) {
+                        var popupcontent = "";
+                        $.each(feature.properties,function(k,v){
+                            popupcontent = popupcontent + "<span style='font-weight:bold'>"+k+": </span>"+v+"<br>";
+                        });
+                        layer.bindPopup(popupcontent);
+
+                        }
+                });
+                console.log(markers.getBounds());
+                map.addLayer(markers);
+                var group = new L.featureGroup(markers);
+
+                map.fitBounds(group.getBounds());
+
+                var layers = markers.getLayers();
+                //layers[0].openPopup();
+                //map.fitBounds(markers.getBounds());
+            },
+            error: function (request, status, errorThrown) {
+                console.log(status);
+            }
+        });
+}
 
 function streamer(lat,lon){
 
@@ -1164,7 +1246,7 @@ function calcNFIP(places){
 
 <div class = 'center'>
         <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
-
+        Search for River:<input type="text" id="riverSearch"><br>
         <div style="float:center;">Single Year:<input type="text" id="singleYear" maxlength="4" size="4">
         <label for="years2show">Years to Show:</label>
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
