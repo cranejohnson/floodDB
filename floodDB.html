@@ -222,12 +222,6 @@ $( function() {
     });
 
 
-    $("#riverSearch").blur(function(){
-        findStreamByName($("#riverSearch").val(),map);
-    });
-
-
-
     $("#singleYear").blur(function() {
         if($( "#singleYear" ).val().length ==4){
             $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
@@ -267,7 +261,11 @@ $(document).ready(function(){
 
 function findStreamByName(name,map){
 
-    var bounds = map.getBounds();
+    $('#loading-image').show();
+    //var bounds = map.getBounds();
+    var corner1 = L.latLng(50, -170),
+        corner2 = L.latLng(75, -132),
+        bounds = L.latLngBounds(corner1, corner2);
 
     var nhdUrl = 'https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/9/query';
     var streamURL = 'https://txpub.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/1/query';
@@ -280,9 +278,10 @@ function findStreamByName(name,map){
         spatialRel:'esriSpatialRelIntersects',
         returnGeometry:true,
         returnTrueCurves:false,
+        geometryPrecision:1,
         outSR:3857,
         returnIdsOnly:false,
-        returnCountOnly:false,
+        returnCountOnly:true,
         returnZ:false,
         returnM:false,
         returnDistinctValues:false,
@@ -290,6 +289,17 @@ function findStreamByName(name,map){
         f:'json'
         }
 
+    $.ajax({
+        type: "GET",
+        url: streamURL,
+        data: params,
+        dataType: "json",
+        success: function (data) {
+            $('#foundRivers').html(' Reaches Found:'+data.count);
+        }
+    });
+
+    params.returnCountOnly = false;
     var flowLines = {"type":"FeatureCollection",
                         "features":[],
                         "crs":{
@@ -304,6 +314,10 @@ function findStreamByName(name,map){
         "color": "green",
         "weight": 5,
     };
+    if(typeof(layersByName['streamNameLayer'] ) != 'undefined'){
+        map.removeLayer(layersByName['streamNameLayer']);
+        mapControl.removeLayer(layersByName['streamNameLayer']);
+    }
      $.ajax({
             type: "GET",
             url: streamURL,
@@ -326,18 +340,23 @@ function findStreamByName(name,map){
 
                         }
                 });
-                console.log(markers.getBounds());
+                //console.log(markers.getBounds());
                 map.addLayer(markers);
+                layersByName['streamNameLayer'] = markers;
                 var group = new L.featureGroup(markers);
-
-                map.fitBounds(group.getBounds());
+                console.log(group.getBounds());
 
                 var layers = markers.getLayers();
                 //layers[0].openPopup();
-                //map.fitBounds(markers.getBounds());
+                map.fitBounds(markers.getBounds());
+                mapControl.addOverlay(markers, "Named Stream Reaches");
+
             },
             error: function (request, status, errorThrown) {
                 console.log(status);
+            },
+            complete: function(){
+                $('#loading-image').hide();
             }
         });
 }
@@ -352,7 +371,7 @@ function streamer(lat,lon){
     var wd = 1370*100;    //imageDisplay x 100 = each pixel 100 meters
 
     var params = {
-        tolerance : 3,
+        tolerance : 20,
         returnGeometry : true,
         geometryType : 'esriGeometryPoint',
         mapExtent : (point[0]-wd)+','+(point[1]-ht)+','+(point[0]+wd)+','+(point[1]+ht),
@@ -378,6 +397,9 @@ function streamer(lat,lon){
         "weight": 5,
         "opacity": 0.65
     };
+    if(typeof(layersByName['reachLayer'] ) != 'undefined'){
+        map.removeLayer(layersByName['reachLayer']);
+    }
      $.ajax({
             type: "GET",
             //url: "https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/identify",
@@ -406,6 +428,8 @@ function streamer(lat,lon){
                 }
             });
             map.addLayer(markers);
+            layersByName['reachLayer'] = markers;
+
 
             var layers = markers.getLayers();
             layers[0].openPopup()
@@ -488,9 +512,6 @@ function mapFloods(gFloods){
         checkMonths.push('');
      }
 
-
-    console.log(checkMonths);
-
     var floodSeverity = [];
     $.each($("input[name='severity[]']:checked"), function() {
         floodSeverity.push($(this).val());
@@ -508,7 +529,7 @@ function mapFloods(gFloods){
 
 
     if(typeof(layersByName['floodLayer'] ) != 'undefined'){
-        console.log(map.removeLayer(layersByName['floodLayer']));
+        map.removeLayer(layersByName['floodLayer']);
         mapControl.removeLayer(layersByName['floodLayer']);
     }
 
@@ -553,7 +574,6 @@ function mapFloods(gFloods){
         showCoverageOnHover: false,
         maxClusterRadius: 1
     });
-
 
     var geoJsonLayer = L.geoJSON(plotFloods, {
         style: function (feature) {
@@ -703,9 +723,16 @@ function isNumeric(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
 }
 
-//$(document).ajaxStop(function () {
+$('#loading-image').bind('ajaxStart', function(){
+    $(this).show();
+}).bind('ajaxStop', function(){
+    $(this).hide();
+});
+
+
 $.when(async1, async2,async3,async4,async5).done(function() {
 
+    $('#loading-image').hide();
     $( "#years2show" ).val('1890 - 2017');
     $( "#months2show" ).val('Jan - Dec');
     console.log('Done Loading');
@@ -1245,8 +1272,10 @@ function calcNFIP(places){
     <h4>DRAFT - Summary Stats from Alaska Flood Database - DRAFT</h4>
 
 <div class = 'center'>
-        <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i>
-        Search for River:<input type="text" id="riverSearch"><br>
+        <div id="loading-image" style="width:69px;height:89px;border:1px solid black;position:relative;top:10%;left:50%;padding:2px;border:10px"><img src='https://www.w3schools.com/jquery/demo_wait.gif' width="64" height="64" /><br>Loading..</div>
+
+        <i><a href="https://docs.google.com/a/noaa.gov/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit?usp=sharing">Database</a></i><br>
+        Search for River:<input type="text" id="riverSearch"><button type="button" onclick ="findStreamByName($('#riverSearch').val(),map);">Find Rivers</button><span id="foundRivers"></span><br>
         <div style="float:center;">Single Year:<input type="text" id="singleYear" maxlength="4" size="4">
         <label for="years2show">Years to Show:</label>
         <input type="text" id="years2show" readonly style="border:0;padding:4px; color:#f6931f; font-size: 14px; font-weight:bold;">
@@ -1293,7 +1322,6 @@ function calcNFIP(places){
         <table id="floodCommunityTable" class='box-table-a dataTable' ></table>
 
     </div>
-
 <script>
 
 
