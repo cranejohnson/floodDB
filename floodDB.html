@@ -607,8 +607,15 @@ function markerClick(e) {
     var floodList = [];
 
     $.each(plotFloods.features,function(i,flood){
-        if(flood.properties.communitiesID == e.target.feature.properties.communitiesID){
-            floodList.push(flood.properties.floodsID);
+        if(e.target.feature.properties.communitiesID > 0){
+            if(flood.properties.communitiesID == e.target.feature.properties.communitiesID){
+                floodList.push(flood.properties.floodsID);
+            }
+        }
+        else{
+            if(flood.properties.road == e.target.feature.properties.road){
+                floodList.push(flood.properties.floodsID);
+            }
         }
     });
     makeFloodTable('floodMapTable',floods,floodList);
