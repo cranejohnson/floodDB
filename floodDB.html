@@ -268,7 +268,7 @@ function findStreamByName(name,map){
         bounds = L.latLngBounds(corner1, corner2);
 
     var nhdUrl = 'https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/9/query';
-    var streamURL = 'https://txpub.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/1/query';
+    var streamURL = 'https://txgeo.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/1/query';
     var params = {
         //where: 'upper(GNIS_NAME) like upper(\'%'+name+'%\')',
         where: 'upper(Name) like upper(\'%'+name+'%\')',
@@ -403,7 +403,7 @@ function streamer(lat,lon){
      $.ajax({
             type: "GET",
             //url: "https://services.nationalmap.gov/arcgis/rest/services/nhd/mapserver/identify",
-            url: "https://txpub.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/identify",
+            url: "https://txgeo.usgs.gov/arcgis/rest/services/Streamer/HydroData/MapServer/identify",
             data: params,
             contentType: "application/json; charset=utf-8",
             headers : {'Content-Type' : 'application/x-www-form-urlencoded; charset=UTF-8'},
@@ -1648,9 +1648,9 @@ var usgsTopo =   L.esri.tiledMapLayer({
 
 
 var worldTerrain  =  L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" );
-var oceanLayer    =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
-var hydroTerrain  =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
-var hydroMask     =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2,"maxNativeZoom":11} );
+var oceanLayer    =  L.tileLayer( "https://txgeo.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
+var hydroTerrain  =  L.tileLayer( "https://txgeo.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
+var hydroMask     =  L.tileLayer( "https://txgeo.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2,"maxNativeZoom":11} );
 var Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
 	attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 });
