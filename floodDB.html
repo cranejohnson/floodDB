@@ -56,7 +56,13 @@
 .box-table-a tr:hover td{
     background:#d0dafd;
     color:#339;}
+#impacts{
+    background:lightgrey;
+}
 
+#white{
+    background:white;
+}
 h4 {
     text-align: center;
 }
@@ -153,40 +159,15 @@ h4 {
 //import {geojsonToArcGIS, arcgisToGeoJSON} from 'esri2geojson.js';
 
 
-var communities = {};
 
 var floods = {};
+var locations = {};
 var plotFloods = {};
 var layersByName = {};
-var DCI = {};
-var hmp = {};
-var roads = {};
 var map = {};
-var geoMilePost = {
-        "type" : "FeatureCollection",
-        'crs': {
-            'type': 'name',
-            'properties': {
-                'name': 'EPSG:3857'
-            }
-        },
-        "features": []
-    };
 
-var geoFloods = {
-        "type" : "FeatureCollection",
-        'crs': {
-            'type': 'name',
-            'properties': {
-                'name': 'EPSG:3857'
-            }
-        },
-        "features": []
-    };
 
 $( function() {
-
-
     $( "#qmeas-years" ).dragslider({
         range: true,
         min: 1889,
@@ -196,11 +177,11 @@ $( function() {
         values: [1889,2017],
         slide: function( event, ui ) {
             $( "#years2show" ).val(ui.values[0]+ " - " +ui.values[1]);
-            mapFloods(geoFloods);
+            mapFloods(floods);
         },
         stop: function( event, ui ) {
             $( "#years2show" ).val(ui.values[0]+ " - " +ui.values[1]);
-            mapFloods(geoFloods);
+            mapFloods(floods);
         }
     });
 
@@ -213,11 +194,11 @@ $( function() {
         values: [0,11],
         slide: function( event, ui ) {
             $( "#months2show" ).val( moment(new Date(2012, ui.values[0], 01)).format("MMM")+ " - " + moment(new Date(2012, ui.values[1], 01)).format("MMM") );
-            mapFloods(geoFloods);
+            mapFloods(floods);
         },
         stop: function( event, ui ) {
             $( "#months2show" ).val( moment(new Date(2012, ui.values[0], 01)).format("MMM")+ " - " + moment(new Date(2012, ui.values[1], 01)).format("MMM") );
-            mapFloods(geoFloods);
+            mapFloods(floods);
         }
     });
 
@@ -227,7 +208,7 @@ $( function() {
             $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
             $( "#qmeas-years" ).dragslider('values',0,$("#singleYear").val());
             $( "#qmeas-years" ).dragslider('values',1,$("#singleYear").val());
-            mapFloods(geoFloods);
+            mapFloods(floods);
         }
     });
 });
@@ -236,7 +217,7 @@ $( function() {
 
 $(document).ready(function(){
     $("input[type='checkbox']").on('change', function(){
-         mapFloods(geoFloods);
+         mapFloods(floods);
     });
 
     $(document).keydown(function(e) {
@@ -252,7 +233,7 @@ $(document).ready(function(){
             $( "#years2show" ).val($("#singleYear").val()+ " - " +$("#singleYear").val());
             $( "#qmeas-years" ).dragslider('values',0,$("#singleYear").val());
             $( "#qmeas-years" ).dragslider('values',1,$("#singleYear").val());
-            mapFloods(geoFloods);
+            mapFloods(floods);
         }
     });
 });
@@ -461,14 +442,14 @@ function getHUC(lat,lon){
         imageDisplay : '1370,315,1',
         f : 'json',
         sr : 102100,
-        layers: 'all:6,7',
+        layers: 'all:3,4,5,6,7',
         geometry: '{ "x" : '+point[0]+', "y" : '+point[1]+' }'
     };
 
     $('#siteInfo').append('Loading HUC codes.......');
      $.ajax({
             type: "GET",
-            url: "https://services.nationalmap.gov/arcgis/rest/services/wbd/MapServer/identify",
+            url: "https://hydro.nationalmap.gov/arcgis/rest/services/wbd/MapServer/identify",
             data: params,
             contentType: "application/json; charset=utf-8",
             headers : {'Content-Type' : 'application/x-www-form-urlencoded; charset=UTF-8'},
@@ -476,10 +457,9 @@ function getHUC(lat,lon){
             success: function (data) {
                 $('#siteInfo').empty();
 
-                $('#siteInfo').append('Lat: '+lat+'<br>Lon: '+lon+'<br>');
+                $('#siteInfo').append('Location Information:<br/>Lat: '+parseFloat(lat).toFixed(4)+'   Lon: '+parseFloat(lon).toFixed(4)+'<br>');
                 $.each(data.results,function(){
-
-                    var huc = (this.layerId-1)*2;
+                    var huc = (this.layerId)*2;
                     $('#siteInfo').append(this.layerName+': '+this.value+' '+this.attributes['HUC'+huc]+'<br>');
                 });
                 },
@@ -537,34 +517,42 @@ function mapFloods(gFloods){
     var listPlotFloods = [];
     plotFloods = {};
     plotFloods = $.extend(true, {}, gFloods);
+    console.log(gFloods);
+    console.log(floodCause);
     var matchFeatures = [];
+    var pushed = false;
     $.each(gFloods.features,function(i,flood){
+        pushed = false;
         if(typeof(flood) != 'undefined'){
             if($.inArray(flood.properties.fldCause,floodCause)>-1){
                 if($.inArray(flood.properties.floodSeverity,floodSeverity)>-1){
-                    if((flood.properties.year>=beginYear)&&(flood.properties.year <= endYear)){
-                        if(jQuery.inArray(flood.properties.month.trim().toLowerCase(),checkMonths) > -1){
+                    if((parseInt(moment(flood.properties.floodDate).format('YYYY')) >=beginYear)&&(parseInt(moment(flood.properties.floodDate).format('YYYY')) <= endYear)){
+                        if(jQuery.inArray(moment(flood.properties.floodDate).format('MMM').toLowerCase(),checkMonths) > -1){
                             if(types.length >0){
                                 $.each(types,function(i,type){
                                     //console.log(flood.properties[type]);
                                     if(flood.properties[type] != ""){
-                                        if($.inArray(flood.properties.floodsID,listPlotFloods) == -1){
+                                        if($.inArray(flood.properties.floodID,listPlotFloods) == -1){
                                             matchFeatures.push(flood);
-                                            listPlotFloods.push(flood.properties.floodsID);
+                                            pushed = true;
+                                            listPlotFloods.push(flood.properties.floodID);
                                         }
                                     }
                                 });
                             }
                             else{
                                 matchFeatures.push(flood);
+                                pushed = true;
                             }
                         }
                     }
                 }
             }
         }
+        if(pushed == false) console.log(flood);
     });
 
+    console.log('count:'+matchFeatures.length);
     plotFloods.features = matchFeatures;
 
     $('#numberPlotted').text('Events Mapped: '+plotFloods.features.length);
@@ -581,7 +569,6 @@ function mapFloods(gFloods){
             return {color: 'red'};
         },
 		onEachFeature: function (feature, layer) {
-              //layer.bindPopup(feature.properties.name);
               layer.on({
                 click:markerClick
                });
@@ -590,7 +577,7 @@ function mapFloods(gFloods){
         return L.marker(latlng, {
             icon: L.icon.glyph({
                 prefix: '',
-                glyph: feature.properties.floodsID
+                glyph: feature.properties.floodID
             })
         })
       }
@@ -607,19 +594,19 @@ function markerClick(e) {
     var floodList = [];
 
     $.each(plotFloods.features,function(i,flood){
-        if(e.target.feature.properties.communitiesID > 0){
-            if(flood.properties.communitiesID == e.target.feature.properties.communitiesID){
-                floodList.push(flood.properties.floodsID);
+        if(e.target.feature.properties.locationID > 0){
+            if(flood.properties.locationID == e.target.feature.properties.locationID){
+                floodList.push(flood.properties.floodID);
             }
         }
         else{
             if(flood.properties.road == e.target.feature.properties.road){
-                floodList.push(flood.properties.floodsID);
+                floodList.push(flood.properties.floodID);
             }
         }
     });
-    makeFloodTable('floodMapTable',floods,floodList);
     getHUC(e.latlng.lat,e.latlng.lng);
+    makeFloodTable('floodMapTable',floods,floodList);
 }
 
 
@@ -637,70 +624,14 @@ function getParameterByName(name, url) {
 var checkCode = getParameterByName('id');
 var host = location.host;
 
-//Get DCI Table
+//Get geoJson Flood and Locations Data
 var async1 = $.ajax({
-    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=DCI",
+    url:"https://script.googleusercontent.com/macros/echo?user_content_key=li0WsTmUgzmhc_rQdluDkEwjvPwCadmZNgMwy31OgniQu6zwXC5oYthXBTphVjnA-EAX-GUBg5SyOrpHjgkB72l48Q0Rh-3Km5_BxDlH2jW0nuo2oDemN9CCS2h10ox_1xSncGQajx_ryfhECjZEnJtNY5KAB4lk_fxCj9Y6mWGQU5R2vr6_1bckslA8G_1OwcLzYMoCkMwYZpTak_o22Q&lib=MgXIsl3dO0QK-b7VkKGm9WvgevZnNMH3F",
+    //url:"http://localhost:8888/web/floodDB/test.json",
     dataType: "json",
     success: function( response ) {
-        $.each(response,function(i,flood){
-            DCI[flood.stateDR] = {
-                title:flood.title,
-                narrative:flood.narrative
-            }
-        });
-
-    }
-});
-
-//Get Community Table
-var async2 = $.ajax({
-    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=communities",
-    dataType: "json",
-    success: function( response ) {
-        communities = response;
-    }
-});
-
-//Get Flood Table
-var async3 = $.ajax({
-    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=floods",
-    dataType: "json",
-    success: function( response ) {
-        floods = response;
-    }
-});
-
-//Get hmp Table
-var async4 = $.ajax({
-    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=hazardMitigationPlans",
-    dataType: "json",
-    success: function( response ) {
-        hmp = response;
-    }
-});
-
-//Get road Table
-var async5 = $.ajax({
-    url:"https://script.google.com/macros/s/AKfycbwsM9SsNclK-2b3KsEqVjGZ4C3vtPByEA2SRaaWkL5EIXBR9Icr/exec?id=1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4&sheet=AKroads",
-    dataType: "json",
-    success: function( response ) {
-        roads = response;
-        $.each(roads,function(i,road){
-            var feature = {
-                "type" : "Feature",
-                "geometry": {},
-                "properties": road
-            }
-            feature.geometry.coordinates = [road.LON,road.LAT];
-            feature.geometry.type = "Point";
-            geoMilePost.features.push(feature);
-        });
-        // Point style
-        var mpStyle = {
-            opacity: 0.9,
-            radius: 1,
-            fillOpacity: 0.7
-        };
+        floods = response['floods'];
+        locations = response['locations'];
     }
 });
 
@@ -738,49 +669,18 @@ $('#loading-image').bind('ajaxStart', function(){
 });
 
 
-$.when(async1, async2,async3,async4,async5).done(function() {
+$.when(async1).done(function() {
 
     $('#loading-image').hide();
     $( "#years2show" ).val('1890 - 2017');
     $( "#months2show" ).val('Jan - Dec');
     console.log('Done Loading');
-    calcNFIP(communities);
+    calcNFIP(locations);
 
 
-    $.each(floods,function(i,flood){
-        var feature = {
-            "type" : "Feature",
-            "geometry": {},
-            "properties": flood
-        }
-        var placeID = flood['communitiesID'];
-        var result = communities.filter(function( obj ) {
-                return obj.ID == placeID;
-            });
-        jQuery.extend(floods[i], result[0]);
-        feature.geometry.type = "Point";
-        if(feature.properties.communitiesID == ""){
-            if(feature.properties.road != ""){
-                $.each(roads,function(i,road){
-                    if((road.ROUTE_NAME == feature.properties.road) && (road.MP == feature.properties.milePost)){
-                        feature.geometry.coordinates = [road.LON,road.LAT];
-                        return true;
-                     }
-                });
-            }
-        }
-        else{
-            feature.geometry.coordinates = [feature.properties.Lon,feature.properties.Lat];
-        }
-        if(feature.properties.floodSeverity == "") feature.properties.floodSeverity = 'Undefined';
-        if(feature.properties.fldCause == "") feature.properties.fldCause = 'undefined';
-        if(typeof(feature.geometry.coordinates) != 'undefined'){
-            geoFloods.features.push(feature);
-
-        }
-        else{
-            //console.log(feature);
-        }
+    $.each(floods.features,function(i,flood){
+        if(flood.properties.floodSeverity == "") flood.properties.floodSeverity = 'Undefined';
+        if(flood.properties.fldCause == "") flood.properties.fldCause = 'undefined';
 
     });
     calcBorFloods(floods,10,'Major');
@@ -788,7 +688,7 @@ $.when(async1, async2,async3,async4,async5).done(function() {
     calcCauseFloods(floods,'Total');
     calcSourceFloods(floods);
     calcFloodsByDecade(floods);
-    mapFloods(geoFloods);
+    mapFloods(floods);
 
 
 });
@@ -798,7 +698,7 @@ function getFloodList(floods,severity,filter,value){
     if(value == 'Undefined');
     $.each(floods,function(i,flood){
         if((flood['floodSeverity'] == severity) &&(flood[filter] == value)){
-            floodList.push(flood['floodsID']);
+            floodList.push(flood['floodID']);
         }
     });
     return floodList;
@@ -806,109 +706,76 @@ function getFloodList(floods,severity,filter,value){
 
 
 
-// Builds the HTML Table out of myList.
-function buildHtmlTable(selector,myList) {
-  var columns = addAllColumnHeaders(myList, selector);
-
-  for (var i = 0; i < myList.length; i++) {
-    var row$ = $('<tr/>');
-    for (var colIndex = 0; colIndex < columns.length; colIndex++) {
-      var cellValue = myList[i][columns[colIndex]];
-      if (cellValue == null) cellValue = "";
-      row$.append($('<td/>').html(cellValue));
-    }
-    $(selector).append(row$);
-  }
-}
-
-// Adds a header row to the table and returns the set of columns.
-// Need to do union of keys from all records as some records may not contain
-// all records.
-function addAllColumnHeaders(myList, selector) {
-    var columnSet = [];
-    var headerTr$ = $('<tr/>');
-
-    for (var i = 0; i < myList.length; i++) {
-        var rowHash = myList[i];
-        for (var key in rowHash) {
-            if ($.inArray(key, columnSet) == -1) {
-                columnSet.push(key);
-                headerTr$.append($('<th/>').html(key));
-            }
-        }
-    }
-  $(selector).append(headerTr$);
-
-  return columnSet;
-}
-
-
 
 function makeFloodTable(id,floods,floodList){
-    var columns = ['floodsID','name','year','month','fldCause','floodSeverity','impactsHMP','impactsRiverNotes','impactsStormReports','fedDR','stateDR','stormReportID'];
-    var data = [];
-    $.each(geoFloods.features,function(i,flood){
-        if(floodList.indexOf(flood.properties.floodsID)>-1){
-            var d = {};
+    var columns = ['floodID','location','waterBody','date','fldCause','floodSeverity','fedDR','stateDR'];
+    var headerTr$ = $('<tr/>');
+    $.each(columns,function(i,col){
+        headerTr$.append($('<th/>').html(col));
+    })
+
+    $.each(floods.features,function(i,flood){
+        var floodRow$ = $('<tr/>');
+        if(floodList.indexOf(flood.properties.floodID)>-1){
             var googleRow = parseInt(flood.properties.floodsRow);
             $.each(columns,function(i,val){
-                d[val] = flood.properties[val];
+                cellValue = flood.properties[val];
                 if(val == 'name'){
-                    if(d[val] == ""){
-                        d[val] = flood.properties.road+" MP "+flood.properties.milePost;
+                    if(cellValue == ""){
+                        cellValue = flood.properties.road+" MP "+flood.properties.milePost;
                     }
                 }
-                if(val == 'floodsID'){
-                    d[val] = "<a target='dbTab' href='https://docs.google.com/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit#gid=1059416862&range=b"+googleRow+"'>"+d[val]+"</a>";
+                if(val == 'location'){
+                    if(flood.properties.location != ""){
+                        cellValue = flood.properties.location
+                    }
+                    else{
+                        cellValue = flood.properties.road+" MP "+ flood.properties.milePost;
+                    }
                 }
-                if(val == 'stormReportID'){
-                    d[val] = "<a target='_blank' href='https://www.ncdc.noaa.gov/stormevents/eventdetails.jsp?id="+d[val]+"'>"+d[val]+"</a>";
+                if(val == 'date'){
+                    if(flood.properties.dateAccuracy == 'day') cellValue = moment(flood.properties.floodDate).format("MMM Do YYYY")
+                    if(flood.properties.dateAccuracy == 'month') cellValue = moment(flood.properties.floodDate).format("MMM YYYY");
+                    if(flood.properties.dateAccuracy == 'year') cellValue = moment(flood.properties.floodDate).format("YYYY");
+                }
+                if(val == 'floodID'){
+                    cellValue = "<a target='dbTab' href='https://docs.google.com/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit#gid=1059416862&range=a"+googleRow+"'>"+cellValue+"</a>";
                 }
                 if(val == 'fedDR'){
-                    var fedNum = d[val].replace( /\D+/g, '');
-                    d[val] = "<a target='_blank' href='https://www.fema.gov/disaster/"+fedNum+"'>"+d[val]+"</a>";
+                    var fedNum = cellValue.replace( /\D+/g, '');
+                    cellValue = "<a target='_blank' href='https://www.fema.gov/disaster/"+fedNum+"'>"+cellValue+"</a>";
                 }
-                if(val == 'impactsHMP'){
-                    hmpObj(flood,hmp);
-                    if(d[val] != "") d[val] = d[val] + "<br>" + hmpObj.htmlList;
-                }
-                if(val == 'stateDR'){
-                    if(d[val] != ""){
-                       var stateDR = d[val];
-                       d[val] = '<div class="tooltip">'+stateDR+'<span class="tooltiptext">'+DCI[stateDR].title+'<br>'+DCI[stateDR].narrative+'</span></div>';
-                    }
-
-                }
+                floodRow$.append($('<td/>').html(cellValue));
 
             });
-            data.push(d);
+            $.each(flood.properties.impacts,function(i,impact){
+                var editText = "<a target='dbTab' href='https://docs.google.com/spreadsheets/d/1b7cEPfb8wYtCUnx1JWsNRd29GCRzwzFeQCYngm-LnY4/edit#gid=906695508&range=a"+impact.impactsRow+"'>Edit Impact</a>";
+                var sourceUrl = "<a target='_blank' href='"+impact.source.url+"'>Link</a>";
+                if(impact.source.remoteIDLinkUrl != ""){
+                    sourceUrl = "<a target='_blank' href='"+impact.source.remoteIDLinkUrl+impact.remoteID+"'>Link</a>";
+                }
+                var impactHtml = "<strong>"+impact.floodImpacts+"</strong><br>"+editText+"<br><br><i>Source:</i><br>&nbsp;&nbsp;Document Type:"+impact.source.documentType+"<br>&nbsp;&nbsp;Title:"+impact.source.title+" "+impact.source.year+"<br>&nbsp;&nbsp;Agency:"+impact.source.publishingAgency+"<br>&nbsp;&nbsp;"+sourceUrl;
+                var sourceRow$ = $('<tr>');
+                sourceRow$.append($('<td id="white"/>').html(''));
+                sourceRow$.append($('<td id="white"/>').html(''));
+                sourceRow$.append($('<td id="white"/>').html(''));
+                sourceRow$.append($('<td colspan="5" id="impacts">').html(impactHtml));
+                $('#'+id).prepend(sourceRow$);
+            });
+            $('#'+id).prepend(floodRow$);
+
+
         }
     });
-    buildHtmlTable('#'+id,data);
+
+    console.log(id);
+    $('#'+id).prepend(headerTr$);
+
     $('.buttonControl').html("<button type=\"button\" id=\"uncheckCause\" onclick =\"$('.dataTable').empty();\">Clear Data Tables</button>");
 
-
-
-
 }
 
-function hmpObj(flood,hmpList){
 
-    var localList = hmpList.filter(function( obj ) {
-                return obj.communityID == flood.properties.communitiesID;
-            });
-    var regionList = hmpList.filter(function( obj ) {
-                return obj.community == flood.properties.Bor_Cen_Ar__;
-            });
-    var html = "";
-    $.each(localList,function(i,localPlan){
-        html = html + "<a target='_blank' href='"+localPlan.url+"' title='"+localPlan.planName+"("+localPlan.planYear+")'>Local - "+localPlan.planYear+"</a><br>";
-    });
-    $.each(regionList,function(i,plan){
-        html = html + "<a target='_blank'  href='"+plan.url+"' title='"+plan.planName+"( "+plan.planYear+" )'>Regional - "+plan.planYear+"</a><br>";
-    });
-    hmpObj.htmlList = html;
-}
 
 function calcSourceFloods(floods){
     var sources = ['impactsHMP','impactsRiverNotes','impactsStormReports'];
@@ -983,11 +850,12 @@ function calcSourceFloods(floods){
 function calcFloodsByDecade(floods){
     var dataArray = {};
     var borArray = {};
-    $.each(floods, function(i,flood){
+    $.each(floods.features, function(i,flood){
         var year = 1800;
 
-        if(flood['year'] > 1900){
-            year = Math.floor((flood['year']/10))*10;
+        var floodYear = parseInt(moment(flood.properties.floodDate).format("YYYY"));
+        if(floodYear > 1900){
+            year = Math.floor((floodYear/10))*10;
         }
         if(typeof(dataArray[year]) == 'undefined'){
             dataArray[year] = { Total : 1,
@@ -999,7 +867,7 @@ function calcFloodsByDecade(floods){
             dataArray[year][flood['floodSeverity']] = 1;
         }
         else{
-            dataArray[year][flood['floodSeverity']] = dataArray[year][flood['floodSeverity']] + 1;
+            dataArray[year][flood.properties.floodSeverity] = dataArray[year][flood.properties.floodSeverity] + 1;
             dataArray[year]['Total'] = dataArray[year]['Total'] + 1;
         }
     });
@@ -1057,22 +925,23 @@ function calcFloodsByDecade(floods){
 function calcCauseFloods(floods,sortby){
     var dataArray = {};
     var borArray = {};
-    $.each(floods, function(i,flood){
-        if(typeof(dataArray[flood['fldCause']]) == 'undefined'){
-            dataArray[flood['fldCause']] = { Total : 1,
+    $.each(floods.features, function(i,flood){
+        if(typeof(dataArray[flood.properties.fldCause]) == 'undefined'){
+            dataArray[flood.properties.fldCause] = { Total : 1,
                                                  Major: 0,
                                                  Moderate: 0,
                                                  Minor: 0,
                                                  Undefined:0
                                                };
-            dataArray[flood['fldCause']][flood['floodSeverity']] = 1;
+            dataArray[flood.properties.fldCause][flood.properties.floodSeverity] = 1;
         }
         else{
-            dataArray[flood['fldCause']][flood['floodSeverity']] = dataArray[flood['fldCause']][flood['floodSeverity']] + 1;
-            dataArray[flood['fldCause']]['Total'] = dataArray[flood['fldCause']]['Total'] + 1;
+            dataArray[flood.properties.fldCause][flood.properties.floodSeverity] = dataArray[flood.properties.fldCause][flood.properties.floodSeverity] + 1;
+            dataArray[flood.properties.fldCause]['Total'] = dataArray[flood.properties.fldCause]['Total'] + 1;
         }
     });
 
+    console.log(dataArray);
     var sortable = [];
     for (var site in dataArray)
         sortable.push([site, dataArray[site]]);
@@ -1127,22 +996,23 @@ function calcCauseFloods(floods,sortby){
 function calcBorFloods(floods,num,sortby){
     var dataArray = {};
     var borArray = {};
-    $.each(floods, function(i,flood){
-        if(typeof(dataArray[flood['Bor_Cen_Ar__']]) == 'undefined'){
-            dataArray[flood['Bor_Cen_Ar__']] = { Total : 1,
-                                                 Major: 0,
-                                                 Moderate: 0,
-                                                 Minor: 0,
-                                                 Undefined:0
-                                               };
-            dataArray[flood['Bor_Cen_Ar__']][flood['floodSeverity']] = 1;
-        }
-        else{
-            dataArray[flood['Bor_Cen_Ar__']][flood['floodSeverity']] = dataArray[flood['Bor_Cen_Ar__']][flood['floodSeverity']] + 1;
-            dataArray[flood['Bor_Cen_Ar__']]['Total'] = dataArray[flood['Bor_Cen_Ar__']]['Total'] + 1;
+    $.each(floods.features, function(i,flood){
+        if(typeof(flood.properties.locationDetails) !== 'undefined'){
+            if(typeof(dataArray[flood.properties.locationDetails.boroughCensusArea]) == 'undefined'){
+                dataArray[flood.properties.locationDetails.boroughCensusArea] = { Total : 1,
+                                                     Major: 0,
+                                                     Moderate: 0,
+                                                     Minor: 0,
+                                                     Undefined:0
+                                                   };
+                dataArray[flood.properties.locationDetails.boroughCensusArea][flood.properties.floodSeverity] = 1;
+            }
+            else{
+                dataArray[flood.properties.locationDetails.boroughCensusArea][flood.properties.floodSeverity] = dataArray[flood.properties.locationDetails.boroughCensusArea][flood.properties.floodSeverity] + 1;
+                dataArray[flood.properties.locationDetails.boroughCensusArea]['Total'] = dataArray[flood.properties.locationDetails.boroughCensusArea]['Total'] + 1;
+            }
         }
     });
-
     var sortable = [];
     for (var site in dataArray)
         sortable.push([site, dataArray[site]]);
@@ -1191,22 +1061,23 @@ function calcBorFloods(floods,num,sortby){
 function calcComFloods(floods,num,sortby){
     var dataArray = {};
     var borArray = {};
-    $.each(floods, function(i,flood){
-        if(typeof(dataArray[flood['name']]) == 'undefined'){
-            dataArray[flood['name']] = { Total : 1,
+    $.each(floods.features, function(i,flood){
+        if(typeof(dataArray[flood.properties.location]) == 'undefined'){
+            dataArray[flood.properties.location] = { Total : 1,
                                                  Major: 0,
                                                  Moderate: 0,
                                                  Minor: 0,
                                                  Undefined:0
                                                };
-            dataArray[flood['name']][flood['floodSeverity']] = 1;
+            dataArray[flood.properties.location][flood.properties.floodSeverity] = 1;
         }
         else{
-            dataArray[flood['name']][flood['floodSeverity']] = dataArray[flood['name']][flood['floodSeverity']] + 1;
-            dataArray[flood['name']]['Total'] = dataArray[flood['name']]['Total'] + 1;
+            dataArray[flood.properties.location][flood.properties.floodSeverity] = dataArray[flood.properties.location][flood.properties.floodSeverity] + 1;
+            dataArray[flood.properties.location]['Total'] = dataArray[flood.properties.location]['Total'] + 1;
         }
     });
 
+    console.log(dataArray);
     var sortable = [];
     for (var site in dataArray)
         sortable.push([site, dataArray[site]]);
@@ -1251,23 +1122,26 @@ function calcComFloods(floods,num,sortby){
 
 }
 
-function calcNFIP(places){
+function calcNFIP(locations){
     var data = {   name: 'NFIP Status',
         colorByPoint: true,
         data: []
         };
     var dataArray = {};
-    $.each( places, function( i,place ){
-        if(typeof(dataArray[place['NFIP_Status']]) == 'undefined'){
-            dataArray[place['NFIP_Status']] = 1;
-        }
-        else{
-            dataArray[place['NFIP_Status']] = dataArray[place['NFIP_Status']] + 1;
+    $.each( locations.features, function( i,place ){
+        if(place.properties.areaType=='Community'){
+            if(typeof(dataArray[place.properties.nfipStatus]) == 'undefined'){
+                dataArray[place.properties.nfipStatus] = 1;
+            }
+            else{
+                dataArray[place.properties.nfipStatus] = dataArray[place.properties.nfipStatus] + 1;
+            }
         }
     });
     $.each(dataArray,function(key,value){
-        data.data.push({name:key,y:((value/places.length)*100)});
+        data.data.push({name:key,y:((value/locations.features.length)*100)});
     });
+
     var chart = $('#containerNFIP').highcharts();
     chart.addSeries(data);
 }
@@ -1305,15 +1179,17 @@ function calcNFIP(places){
         <input type="checkbox" class = 'cause' name="cause[]" value="snowmelt" checked>Snowmelt
         <input type="checkbox" class = 'cause' name="cause[]" value="GDL" checked>Glacial-Dammed Lake
         <input type="checkbox" class = 'cause' name="cause[]" value="overflow" checked>Overflow
+        <input type="checkbox" class = 'cause' name="cause[]" value="glacier melt" checked>Glacier Melt
+        <input type="checkbox" class = 'cause' name="cause[]" value="non-flood erosion" checked>Non-flood erosion
         <input type="checkbox" class = 'cause' name="cause[]" value="undefined" checked>Undefined
-        <button type="button" id="uncheckCause" onclick ="$('.cause').prop('checked', false);mapFloods(geoFloods);">Uncheck All</button><br>
+        <button type="button" id="uncheckCause" onclick ="$('.cause').prop('checked', false);mapFloods(floods);">Uncheck All</button><br>
 
     </div>
     <div class="maincontainer">
         <div id="mapid"></div>
         <div class='dataTable buttonControl'></div>
-        <table id="floodMapTable" class='box-table-a dataTable' ></table>
         <div id="siteInfo" class=' dataTable' ></div>
+        <table id="floodMapTable" class='box-table-a dataTable' ></table>
 
         <div id="containerCauses" ></div>
         <div class='dataTable buttonControl'></div>
@@ -1649,8 +1525,8 @@ var usgsTopo =   L.esri.tiledMapLayer({
 
 var worldTerrain  =  L.tileLayer( "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}" );
 var oceanLayer    =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Ocean/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
-var hydroTerrain  =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
-var hydroMask     =  L.tileLayer( "https://txpub.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2,"maxNativeZoom":11} );
+var hydroTerrain  =  L.tileLayer( "https://txgeo.usgs.gov/arcgis/rest/services/Mapping/HydroBaseMapForTerrain/MapServer/tile/{z}/{y}/{x}",{"maxNativeZoom":11} );
+var hydroMask     =  L.tileLayer( "https://txgeo.usgs.gov/arcgis/rest/services/Mapping/Mask/MapServer/tile/{z}/{y}/{x}", {"opacity":0.2,"maxNativeZoom":11} );
 var Esri_WorldImagery = L.tileLayer('http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
 	attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 });
