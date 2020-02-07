@@ -14,6 +14,7 @@
 <script src="https://unpkg.com/leaflet@1.0.1/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.css"/>
 <script src="https://unpkg.com/leaflet.icon.glyph@latest"></script>
+<script src="https://unpkg.com/leaflet.icon.glyph@0.2.0/Leaflet.Icon.Glyph.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.0.4/dist/MarkerCluster.Default.css"/>
 <link rel="stylesheet" href="https://azavea.github.io/Leaflet.zoomdisplay/css/leaflet.zoomdisplay.css"/>
 <script src="https://unpkg.com/leaflet.markercluster@1.0.4/dist/leaflet.markercluster.js"></script>
@@ -732,6 +733,7 @@ function makeFloodTable(id,floods,floodList){
                     else{
                         cellValue = flood.properties.road+" MP "+ flood.properties.milePost;
                     }
+					cellValue = cellValue+"<br><br><a target='_blank' href='https://docs.google.com/forms/d/e/1FAIpQLSdP9HCy5rcNzxk2Q3XiKRmCoSNMeJN432SHmTCgYYja-LfTPg/viewform?usp=pp_url&entry.1863536354="+flood.properties.floodID+"'><center><font color = 'red'>Submit a correction</font></center></a>";
                 }
                 if(val == 'date'){
                     if(flood.properties.dateAccuracy == 'day') cellValue = moment(flood.properties.floodDate).format("MMM Do YYYY")
@@ -1150,8 +1152,12 @@ function calcNFIP(locations){
 
 
 </script>
-
-    <h4>DRAFT - Summary Stats from Alaska Flood Database - DRAFT</h4>
+<center>
+<form method="GET" action="https://docs.google.com/forms/d/1DuYbTWquFPHhD4LlarN53PwRZTVmpQVkOwNlJaizWtQ/edit" target="_blank">
+<font color="red">
+<input type="submit" value="Submit a flood not included in the database"></font>
+</form></center>
+    <h4>DRAFT - Summary Stats from Alaska Flood Database</h4>
 
 <div class = 'center'>
         <div id="loading-image" style="width:69px;height:89px;border:1px solid black;position:relative;top:10%;left:50%;padding:2px;border:10px"><img src='https://www.w3schools.com/jquery/demo_wait.gif' width="64" height="64" /><br>Loading..</div>
