@@ -172,10 +172,10 @@ $( function() {
     $( "#qmeas-years" ).dragslider({
         range: true,
         min: 1889,
-        max: 2017,
+        max: 2019,
         rangeDrag: true, // Enable range dragging.
         step: 1,
-        values: [1889,2017],
+        values: [1889,2019],
         slide: function( event, ui ) {
             $( "#years2show" ).val(ui.values[0]+ " - " +ui.values[1]);
             mapFloods(floods);
